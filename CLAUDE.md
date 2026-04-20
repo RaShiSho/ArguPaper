@@ -1,73 +1,52 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## 项目简介
 
-## Project Overview
+ArguPaper 是一个多智能体科研认知系统，实现论文检索 → 理解 → 证据分析 → 对抗性批判 → 共识生成的全流程。
 
-ArguPaper is a multi-agent research cognition system providing paper retrieval → understanding → evidence analysis → adversarial critique → consensus generation. It simulates a research team's thinking process, not just a summarization tool.
+## 常用命令
 
-## Build/Test Commands
+```bash
+# 虚拟环境（必须激活）
+uv venv .venv && source .venv/Scripts/activate  # Windows
+uv venv .venv && source .venv/bin/activate       # Linux/Mac
 
-No code exists yet. When implemented, this will likely be a Python project with:
-- Virtual environment management (uv, poetry, or pipenv)
-- Linting: ruff or flake8
-- Type checking: mypy
-- Testing: pytest
+# 安装依赖
+uv pip install -e .
 
-## Architecture
+# 运行测试
+uv run pytest
 
-### Agent Layer Design (5 layers)
-
-1. **Analysis Layer** - Method principle breakdown, technical route analysis, structured report output
-2. **Evidence Layer** - Experiment extraction (datasets, sample size, metrics), method condition analysis, result credibility analysis
-3. **Critique Layer** - Evidence consistency check (claim↔experiment alignment), method validity, experimental sufficiency
-4. **Debate Layer** - Multi-agent adversarial: Support Agent, Skeptic Agent, Comparator Agent, Evidence Agent
-5. **Judge Layer** - Consensus/disagreement aggregation with supporting evidence
-
-### Iteration Flow
-```
-Analysis → Evidence Extraction → Debate (multi-round) → Search-in-loop (supplement evidence) → Judge
+# 代码检查
+uv run ruff check src/
+uv run mypy src/
 ```
 
-### Core Modules
-
-- **Paper Retrieval Module** - Query expansion, iterative search, search-in-the-loop, quality ranking
-- **Paper Skimming Module** - Structured abstract generation, lightweight Q&A
-- **Deep Analysis Module** - Multi-agent critique and adversarial debate
-- **Global Paper Memory** - Structured long-term knowledge storage (Level 1: title, Level 2: abstract, Level 3: full markdown)
-- **PDF → Markdown Converter** - PDF stored locally for traceability, markdown for agent parsing
-
-### Dynamic Search Engine
-
-Coupled with all agents:
-- Analysis stage → retrieve baselines
-- Debate stage → retrieve counterexamples
-- Critique stage → retrieve evidence
-
-### Output Structure
+## 项目结构
 
 ```
-1. Research Overview
-2. Method Comparison
-3. Evidence Table
-4. Debate Summary
-5. Contradictions
-6. Weakness Analysis
-7. Consensus vs Disagreement
-8. Confidence Score
+src/argupaper/
+├── agents/        # Agent定义（Support, Skeptic, Comparator, Evidence）
+├── chains/        # LangChain Chain（Analysis, Evidence, Critique, Debate）
+├── retrieval/     # 检索模块（Semantic Scholar, ArXiv）
+├── memory/        # 记忆库（PaperStore, ConversationMemory）
+├── pdf/           # PDF处理（MinerUClient, MarkdownCache, Pipeline）
+├── extraction/    # 内容提取（结构化提取, Claim对齐检查）
+├── judge/         # 裁决层（共识检测）
+└── output/        # 输出报告生成
 ```
 
-### Priority
+## 编码规范
 
-- **P0 (MVP)**: Retrieval + Search-in-loop, Skimming, Analysis + Evidence Layer, Simple Debate (2 agents), PDF parsing, basic memory
-- **P1**: Full Debate system, Judge layer, confidence system, dynamic search engine
-- **P2**: Knowledge graph, multi-round optimization, citation expansion
+- Python >= 3.11
+- 类型提示：所有函数必须有类型注解
+- 异步：IO密集用 `async/await`
+- 异常：使用自定义异常类（`src/argupaper/pdf/exceptions.py`）
+- 缓存：计算结果使用缓存键（SHA256）
 
-## Key Differences from Traditional Systems
+## 注意事项
 
-| Dimension | Traditional | ArguPaper |
-|-----------|-------------|-----------|
-| Critique | Surface summarization | Evidence-driven critique |
-| Reasoning | Single-path | Multi-agent adversarial |
-| Retrieval | Static | Search-in-the-loop |
-| Output | Text | Decision + confidence score |
+- **必须使用 uv 虚拟环境**
+- 所有 python 相关 shell 命令通过 `uv run` 执行
+- 使用 `uv` 管理依赖，不使用 pip 直接安装
+- 不要读取 .env 文件，仅需通过 .env.example 查看修改项目环境变量
