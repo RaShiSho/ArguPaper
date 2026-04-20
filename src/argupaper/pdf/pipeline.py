@@ -37,6 +37,7 @@ class PDFPipeline:
         initial_retry_delay: float = 1.0,
         max_retry_delay: float = 60.0,
         retry_multiplier: float = 2.0,
+        public_url_base: Optional[str] = None,
     ):
         """Initialize the pipeline.
 
@@ -48,10 +49,18 @@ class PDFPipeline:
             initial_retry_delay: Initial delay between retries (seconds)
             max_retry_delay: Maximum delay between retries (seconds)
             retry_multiplier: Multiplier for exponential backoff
+            public_url_base: Public URL base for ngrok/tunnel (e.g., "https://xxxx.ngrok-free.dev")
         """
         self.mineru = mineru_client
         self.cache = cache
-        self.local_server = local_server or LocalPDFServer()
+        self.public_url_base = public_url_base
+
+        # Use port 8080 for ngrok compatibility
+        if public_url_base and local_server is None:
+            self.local_server = LocalPDFServer(port=8080)
+        else:
+            self.local_server = local_server or LocalPDFServer()
+
         self.max_retries = max_retries
         self.initial_retry_delay = initial_retry_delay
         self.max_retry_delay = max_retry_delay
@@ -135,7 +144,12 @@ class PDFPipeline:
 
                 # Start server and get URL
                 async with self.local_server:
-                    pdf_url = self.local_server.get_url_for_pdf(cache_key)
+                    if self.public_url_base:
+                        # Use public URL base (ngrok/tunnel)
+                        pdf_url = f"{self.public_url_base}/pdf/{cache_key}"
+                    else:
+                        # Use local server URL
+                        pdf_url = self.local_server.get_url_for_pdf(cache_key)
 
                     # Submit and wait for conversion
                     result = await self.mineru.wait_for_completion(

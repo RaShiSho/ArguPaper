@@ -229,6 +229,30 @@ Judge（裁决）
 
 ---
 
+### 0. CLI用户入口【P0新增】
+
+提供命令行界面作为主要交互方式：
+
+```bash
+# 分析单篇论文
+argupaper analyze ./paper.pdf --output report.md --rounds 3
+
+# 搜索论文
+argupaper search "machine learning theory" --limit 10 --source semantic_scholar
+
+# 直接分析URL
+argupaper analyze "https://arxiv.org/pdf/2301.12345.pdf" --output report.md
+```
+
+#### 设计原则
+
+* **简单优先**：一个命令完成端到端分析
+* **配置友好**：通过 `.env` 或命令行参数配置API keys
+* **渐进输出**：实时显示分析进度，结果分区展示
+* **错误可查**：详细的错误信息和日志
+
+---
+
 ### 1. 全局论文记忆库（升级）
 
 #### 设计特点
@@ -380,6 +404,9 @@ Judge（裁决）
 
 ### 🔴 P0（MVP必须）
 
+* **CLI入口** ← 新增
+  * `argupaper analyze <paper.pdf>` - 分析单篇论文
+  * `argupaper search <query>` - 搜索论文
 * 检索模块 + Search-in-loop
 * 简读模块
 * Analysis + Evidence Layer
