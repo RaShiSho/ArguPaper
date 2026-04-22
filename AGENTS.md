@@ -34,15 +34,17 @@ src/argupaper/
 ├── extraction/    # 内容提取（结构化提取, Claim对齐检查）
 ├── judge/         # 裁决层（共识检测）
 └── output/        # 输出报告生成
+docs/              # 文档
+tests/             # 测试相关代码
 ```
 
 ## 编码规范
 
 - Python >= 3.11
 - 类型提示：所有函数必须有类型注解
-- 异步：IO密集用 `async/await`
-- 异常：使用自定义异常类（`src/argupaper/pdf/exceptions.py`）
-- 缓存：计算结果使用缓存键（SHA256）
+- 每次实现了大部分功能后，自动使用git管理新版本
+- 项目实现具体要求请阅读 docs 文件夹中的内容
+- 对于已经实现的功能，请编写简短的介绍文档，存放到 docs/DONE.md 中
 
 ## 注意事项
 
@@ -50,4 +52,3 @@ src/argupaper/
 - 所有 python 相关 shell 命令通过 `uv run` 执行
 - 使用 `uv` 管理依赖，不使用 pip 直接安装
 - 不要读取 .env 文件，仅需通过 .env.example 查看修改项目环境变量
-- 每次实现了大部分功能后，自动使用git管理新版本

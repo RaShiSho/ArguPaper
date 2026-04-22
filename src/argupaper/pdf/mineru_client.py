@@ -121,6 +121,7 @@ class MinerUClient:
         }
 
         response = await self._make_request("POST", self.SUBMIT_URL, json_data=request_body)
+        print(f"[DEBUG] submit_task response: {response}")
 
         # Try to extract task_id from response
         # Based on typical API patterns, the response might contain:
@@ -153,6 +154,7 @@ class MinerUClient:
             dict containing the conversion result
         """
         status_url = f"{self.SUBMIT_URL}/{task_id}"
+        print(f"[DEBUG] Polling status URL: {status_url}")
         response = await self._make_request("GET", status_url)
         return response.get("data", response)
 
@@ -186,22 +188,37 @@ class MinerUClient:
             )
 
         start_time = time.time()
+        print(f"[DEBUG] Starting to poll for task: {task_id}")
 
         while time.time() - start_time < max_wait_time:
             result = await self.get_task_result(task_id)
+            print(f"[DEBUG] Poll result: {result}")
 
             # Parse status from result
             state = result.get("state") or result.get("status")
+            print(f"[DEBUG] Current state: {state}")
 
-            if state == "SUCCESS" or state == "success":
-                return ConversionResult(
-                    status=TaskStatus.SUCCESS,
-                    markdown=result.get("markdown") or result.get("content", ""),
-                    cache_key="",  # Will be set by caller
-                )
+            # Check for completion states
+            if state in ("SUCCESS", "success", "done"):
+                # Download the result ZIP and extract markdown
+                zip_url = result.get("full_zip_url")
+                if zip_url:
+                    markdown = await self._download_and_extract_markdown(zip_url)
+                    return ConversionResult(
+                        status=TaskStatus.SUCCESS,
+                        markdown=markdown,
+                        cache_key="",  # Will be set by caller
+                    )
+                else:
+                    # Fallback to direct content if available
+                    return ConversionResult(
+                        status=TaskStatus.SUCCESS,
+                        markdown=result.get("markdown") or result.get("content", ""),
+                        cache_key="",
+                    )
 
-            if state == "FAILED" or state == "failed":
-                error_msg = result.get("error") or result.get("message") or "Unknown error"
+            if state in ("FAILED", "failed", "error"):
+                error_msg = result.get("error_msg") or result.get("err_msg") or result.get("message") or "Unknown error"
                 raise ConversionError(f"Conversion failed: {error_msg}", details=result)
 
             # Still processing, wait and poll again
@@ -211,6 +228,43 @@ class MinerUClient:
             f"Conversion timed out after {max_wait_time}s",
             timeout_seconds=int(max_wait_time),
         )
+
+    async def _download_and_extract_markdown(self, zip_url: str) -> str:
+        """Download ZIP file and extract markdown content.
+
+        Args:
+            zip_url: URL to the result ZIP file
+
+        Returns:
+            The extracted markdown content as a string
+        """
+        import zipfile
+        import io
+
+        session = await self._get_session()
+        timeout_obj = aiohttp.ClientTimeout(total=120)  # 2 min for download
+
+        try:
+            async with session.get(zip_url, timeout=timeout_obj) as response:
+                if response.status != 200:
+                    raise ConversionError(f"Failed to download result: HTTP {response.status}")
+
+                zip_data = await response.read()
+
+            # Extract markdown from ZIP
+            with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+                # Look for markdown files
+                md_files = [f for f in zf.namelist() if f.endswith(".md")]
+                if md_files:
+                    # Return the first markdown file
+                    return zf.read(md_files[0]).decode("utf-8")
+                else:
+                    raise ConversionError(f"No markdown file found in ZIP: {zf.namelist()}")
+
+        except aiohttp.ClientError as e:
+            raise ConversionError(f"Failed to download result: {e}")
+        except zipfile.BadZipFile:
+            raise ConversionError(f"Downloaded file is not a valid ZIP")
 
     async def convert(
         self,
