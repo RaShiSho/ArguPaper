@@ -8,11 +8,23 @@
 
 - 完成 `SupportAgent` 与 `SkepticAgent` 的可执行实现
 - 完成 `DebateChain` 的多轮辩论编排
+- 已通过 `AnalyzeWorkflow` 接入 `argupaper analyze` 主流程
 - 支持基于 `analysis` 与 `evidence` 上下文生成辩论内容
 - 支持在证据充分时第 2 轮提前收敛
 - 支持在 baseline / ablation / metrics 缺失时继续跑满配置轮数
 - 为 `AgentMessage` 与 `DebateState` 修复可变默认值问题，避免状态串联
 - 新增 `tests/chains/test_debate.py`，覆盖提前收敛、跑满轮数和状态隔离
+
+当前边界：
+
+- 当前没有独立的 `argupaper debate` CLI 子命令
+- 2-Agent debate 仅作为 `argupaper analyze` 的内部阶段执行
+
+后续增强项：
+
+- 提升 `ConsensusDetector` 的结论提取质量
+- 细化 confidence 的规则计算
+- 增强 report 中对 debate 结果的结构化展示
 
 已验证：
 

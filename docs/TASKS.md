@@ -51,19 +51,19 @@
 
 ## Milestone 3：Debate、Judge 与报告生成
 
-- `P0` T301 实现 [support.py](/E:/Code/Project/ArguPaper/src/argupaper/agents/support.py)。
+- `[DONE] P0` T301 实现 [support.py](/E:/Code/Project/ArguPaper/src/argupaper/agents/support.py)。
   验收：能基于分析结论与证据生成支持观点。
-- `P0` T302 实现 [skeptic.py](/E:/Code/Project/ArguPaper/src/argupaper/agents/skeptic.py)。
+- `[DONE] P0` T302 实现 [skeptic.py](/E:/Code/Project/ArguPaper/src/argupaper/agents/skeptic.py)。
   验收：能针对 claim、实验设计和证据充分性提出质疑。
-- `P0` T303 实现 [debate.py](/E:/Code/Project/ArguPaper/src/argupaper/chains/debate.py) 的 2-Agent 多轮编排。
+- `[DONE] P0` T303 实现 [debate.py](/E:/Code/Project/ArguPaper/src/argupaper/chains/debate.py) 的 2-Agent 多轮编排。
   验收：轮数可配置，至少支持 2 轮。
-- `P0` T304 实现 [consensus.py](/E:/Code/Project/ArguPaper/src/argupaper/judge/consensus.py)。
-  验收：输出 consensus、disagreements、supporting_evidence、confidence score。
-- `P0` T305 实现 [report.py](/E:/Code/Project/ArguPaper/src/argupaper/output/report.py) 的 `generate()` 与 `format_markdown()`。
-  验收：生成符合 `ResearchReport` 的 Markdown 报告。
-- `P0` T306 替换 [commands.py](/E:/Code/Project/ArguPaper/src/argupaper/cli/commands.py) 中 `analyze` 的占位报告逻辑。
+- `[TODO] P0` T304 增强 [consensus.py](/E:/Code/Project/ArguPaper/src/argupaper/judge/consensus.py)。
+  验收：提升 consensus、disagreements、supporting_evidence、confidence score 的提取质量与解释性。
+- `[TODO] P0` T305 增强 [report.py](/E:/Code/Project/ArguPaper/src/argupaper/output/report.py) 的 `generate()` 与 `format_markdown()`。
+  验收：更清晰地呈现 debate/judge 结果，并保持符合 `ResearchReport` 的 Markdown 报告输出。
+- `[DONE] P0` T306 替换 [commands.py](/E:/Code/Project/ArguPaper/src/argupaper/cli/commands.py) 中 `analyze` 的占位报告逻辑。
   验收：`argupaper analyze` 输出真实结构化报告。
-- `P1` T307 为 Debate 和 Judge 增加结构校验与兜底默认值。
+- `[TODO] P1` T307 为 Debate 和 Judge 增加结构校验与兜底默认值。
   验收：单角色输出异常时，不会导致整个报告崩溃。
 
 ## Milestone 4：基础记忆库与 Search-in-the-loop
@@ -81,16 +81,18 @@
 
 ## Milestone 5：测试、稳定性与发布前清理
 
-- `P0` T501 为 `analyze` workflow 增加一条端到端集成测试。
+- `[TODO] P0` T501 为 `analyze` workflow 增加一条端到端集成测试。
   验收：从模拟 PDF 转换结果到最终报告的主流程可跑通。
-- `P0` T502 为 `search` workflow 增加集成测试。
+- `[TODO] P0` T502 为 `search` workflow 增加集成测试。
   验收：支持多源结果合并、去重和排序验证。
-- `P0` T503 统一错误处理与用户可读报错格式。
+- `[TODO] P0` T503 统一错误处理与用户可读报错格式。
   验收：配置缺失、API 失败、空结果、解析失败都有明确提示。
-- `P1` T504 清理配置项与 `.env.example`，补齐新增环境变量。
+- `[TODO] P1` T504 清理配置项与 `.env.example`，补齐新增环境变量。
   验收：文档与代码一致，启动不依赖隐式配置。
-- `P1` T505 补充 README 的 MVP 使用说明。
+- `[TODO] P1` T505 补充 README 的 MVP 使用说明。
   验收：新用户可以按文档完成一次检索和一次分析。
+- `[TODO] P0` T506 为 `analyze` workflow 增加覆盖 debate 链路的集成测试。
+  验收：测试可验证 `--rounds` 参数传递、`Debate Summary` 输出以及 debate 失败时的降级或 warning 行为。
 
 ## 延后项
 
@@ -105,6 +107,6 @@
 
 1. 先做 T001-T005 级别的契约与编排骨架。
 2. 再做 T101-T105，先让 `search` 可用。
-3. 接着做 T201-T205 与 T305-T306，打通 `analyze` 最短链路。
-4. 然后接入 T301-T304，补上批判性能力。
-5. 最后做 T401-T403 与测试收尾。
+3. 接着做 T201-T205 与 T306，打通 `analyze` 最短链路。
+4. 优先补 T304、T305、T307 与 T506，增强已接入的辩论、裁决和报告链路。
+5. 最后做 T401-T403 与其余测试收尾。

@@ -19,7 +19,8 @@
 - PDF 转 Markdown 主链路基本可用：[pipeline.py](/E:/Code/Project/ArguPaper/src/argupaper/pdf/pipeline.py)
 - PDF 缓存与本地服务已有测试覆盖：`tests/pdf/*`
 - 输出结构已定义：[structures.py](/E:/Code/Project/ArguPaper/src/argupaper/output/structures.py)
-- 检索、抽取、分析、辩论、裁决、记忆库多数仍是接口占位
+- `argupaper analyze` 已通过 workflow 接入 2-Agent debate、共识检测和报告生成
+- 检索、抽取、分析、裁决、记忆库仍有部分能力处于 MVP 级或待增强状态
 
 这意味着 MVP 应优先补齐“端到端可运行链路”，而不是大规模重构目录或追求完整研究系统。
 
@@ -55,7 +56,7 @@ argupaper analyze ./paper.pdf --output report.md --rounds 2
 2. 提取论文结构化信息
 3. 生成分析层结论
 4. 提取实验与证据
-5. 进行 2-Agent 轻量辩论
+5. 自动执行 `support` / `skeptic` 2-Agent 轻量辩论，轮数由 `--rounds` 控制
 6. 输出 Markdown 报告并保存基础记忆
 
 ### 场景 B：检索研究主题
@@ -175,6 +176,7 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 - 系统必须支持最少 2 个角色参与辩论：`support` 与 `skeptic`。
 - 辩论轮数必须可配置。
 - 每轮辩论必须围绕已有分析结论和证据展开。
+- 辩论由 `argupaper analyze` 主流程自动触发，不单独提供独立 CLI 子命令。
 - MVP 阶段允许使用模板化或半结构化输出，不要求复杂 agent 社会模拟。
 
 ### FR-8 Search-in-the-loop
@@ -265,17 +267,18 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 - CLI 基础框架
 - 输出结构模型
 - 配置与缓存机制
+- `analyze` workflow 中已接入 2-Agent Debate
 
 主要缺失：
 
 - 实际可用的检索客户端
 - Query expansion
 - Structured extraction
-- Analysis / Evidence / Debate 的真实执行逻辑
-- Judge / Confidence 逻辑
-- Report formatter
-- PaperStore 落盘与读取
-- `analyze` 端到端编排
+- Analysis / Evidence 结果质量与稳定性
+- Judge / Confidence 质量与规则细化
+- Debate 异常兜底与报告呈现细化
+- PaperStore 落盘与读取增强
+- `analyze` 主链路集成测试覆盖
 
 ## 11. MVP 验收标准
 
@@ -286,11 +289,14 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 3. 用户可执行 `argupaper search` 获取真实检索结果，而非占位数据。
 4. 分析流程可在缺少补充检索结果时降级完成。
 5. 系统会缓存 PDF 转换结果，并保存基础论文记录。
-6. 关键模块具备基础测试覆盖，端到端主链路至少有一条集成测试。
+6. `argupaper analyze --rounds N` 会把轮数传递到 debate workflow，并进入最终报告。
+7. Debate 结果必须进入报告中的 `Debate Summary` 区块。
+8. Debate 或补充检索失败时，CLI 必须给出可见 warning 或可解释降级结果。
+9. 关键模块具备基础测试覆盖，端到端主链路至少有一条集成测试。
 
 ## 12. 建议的交付顺序
 
 1. 打通 `search` 的真实结果链路。
 2. 打通 `analyze` 的“PDF -> 抽取 -> 分析 -> 报告”最短主链路。
-3. 在主链路上插入 Evidence 与 2-Agent Debate。
-4. 最后补基础记忆库和 Search-in-the-loop。
+3. 增强已接入的 Evidence、2-Agent Debate 与报告输出质量。
+4. 最后补基础记忆库、Search-in-the-loop 与主链路测试。
