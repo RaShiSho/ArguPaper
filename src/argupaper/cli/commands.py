@@ -1,9 +1,12 @@
 """CLI commands for ArguPaper."""
 
+import sys
 from pathlib import Path
 from typing import Optional
 
 import typer
+from click import IntRange
+from click.core import ParameterSource
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
@@ -16,8 +19,15 @@ from argupaper.cli.formatters import (
     format_warnings,
     render_markdown,
 )
+from argupaper.agents.search import SearchClarificationResponse
 from argupaper.config import load_config
-from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow, SearchOptions, SearchWorkflow
+from argupaper.workflows import (
+    AnalyzeOptions,
+    AnalyzeWorkflow,
+    SearchOptions,
+)
+from argupaper.workflows.models import SearchClarification
+from argupaper.workflows.search_agent import SearchAgentWorkflow
 
 
 console = Console()
@@ -30,11 +40,17 @@ def build_analyze_workflow() -> AnalyzeWorkflow:
     return AnalyzeWorkflow(config)
 
 
-def build_search_workflow() -> SearchWorkflow:
-    """Construct the default search workflow."""
+def build_search_agent_workflow() -> SearchAgentWorkflow:
+    """Construct the default search-agent workflow."""
 
     config = load_config(require_pdf_api_key=False)
-    return SearchWorkflow(config)
+    return SearchAgentWorkflow(config)
+
+
+def build_search_workflow() -> SearchAgentWorkflow:
+    """Backward-compatible alias for the search-agent workflow builder."""
+
+    return build_search_agent_workflow()
 
 
 def analyze(
@@ -112,6 +128,7 @@ def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
 
 
 def search(
+    ctx: typer.Context,
     query: str = typer.Argument(..., help="Search query"),
     limit: int = typer.Option(10, "--limit", "-n", help="Number of results"),
     source: str = typer.Option(
@@ -130,7 +147,9 @@ def search(
         if source not in {"semantic_scholar", "arxiv", "both"}:
             raise ValueError("--source must be one of: semantic_scholar, arxiv, both.")
 
-        workflow = build_search_workflow()
+        workflow = build_search_agent_workflow()
+        limit_overridden = ctx.get_parameter_source("limit") == ParameterSource.COMMANDLINE
+        source_overridden = ctx.get_parameter_source("source") == ParameterSource.COMMANDLINE
         _run_search(
             workflow=workflow,
             options=SearchOptions(
@@ -138,6 +157,11 @@ def search(
                 limit=limit,
                 source=source,
                 verbose=verbose,
+                raw_request=query,
+                requested_limit=limit if limit_overridden else None,
+                interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+                limit_overridden=limit_overridden,
+                source_overridden=source_overridden,
             ),
         )
     except Exception as exc:
@@ -145,7 +169,7 @@ def search(
         raise typer.Exit(code=1)
 
 
-def _run_search(workflow: SearchWorkflow, options: SearchOptions) -> None:
+def _run_search(workflow: SearchAgentWorkflow, options: SearchOptions) -> None:
     """Run paper search."""
 
     with Progress(
@@ -158,21 +182,60 @@ def _run_search(workflow: SearchWorkflow, options: SearchOptions) -> None:
         def progress_callback(message: str) -> None:
             progress.update(task, description=f"[cyan]{message}")
 
-        result = workflow.run_sync(options, progress_callback)
+        result = workflow.run_sync(
+            options,
+            progress_callback,
+            clarification_callback=_resolve_search_clarification if options.interactive else None,
+        )
         progress.update(task, completed=True)
 
     if result.warnings:
         format_warnings(result.warnings)
 
-    if not result.results and result.warnings:
+    if (
+        not result.results
+        and result.retrieved_count == 0
+        and any("search failed" in warning.lower() for warning in result.warnings)
+    ):
         raise RuntimeError("All search sources failed.")
 
     console.print(format_success("Search complete"))
     if options.verbose:
+        console.print(format_info(f"Parser: {result.parse_result.parser}"))
+        console.print(
+            format_info(f"Parsed keywords: {', '.join(result.parse_result.filters.keywords) or 'N/A'}")
+        )
         console.print(format_info(f"Expanded queries: {', '.join(result.expanded_queries)}"))
         console.print(format_info(f"Source stats: {result.source_stats}"))
+        console.print(
+            format_info(
+                "Filter summary: "
+                f"retrieved={result.retrieved_count}, filtered={result.filtered_count}, "
+                f"candidate_limit={result.candidate_limit}"
+            )
+        )
 
     format_search_results(result)
+    console.print(f"[dim]Trace saved to: {Path(result.trace_dir).absolute()}[/dim]")
+
+
+def _resolve_search_clarification(item: SearchClarification) -> SearchClarificationResponse:
+    """Interactively resolve one ambiguous search filter."""
+
+    console.print(format_info(item.prompt))
+    for index, option in enumerate(item.options, start=1):
+        console.print(f"[dim]{index}. {option.label}[/dim]")
+
+    choice = typer.prompt(
+        "Select an option",
+        type=IntRange(1, len(item.options)),
+    )
+    selected = item.options[choice - 1]
+    return SearchClarificationResponse(
+        field=item.field,
+        selected_value=selected.value,
+        selected_label=selected.label,
+    )
 
 
 def get_app() -> typer.Typer:

@@ -8,16 +8,18 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from argupaper.workflows.models import AnalyzeWorkflowResult, SearchWorkflowResult
+from argupaper.workflows.models import AnalyzeWorkflowResult, SearchAgentResult, SearchWorkflowResult
 
 
 console = Console(width=160)
 
 
-def format_search_results(result: SearchWorkflowResult | list[dict[str, Any]]) -> None:
+def format_search_results(
+    result: SearchWorkflowResult | SearchAgentResult | list[dict[str, Any]]
+) -> None:
     """Format and display search results as a table."""
 
-    results = result.results if isinstance(result, SearchWorkflowResult) else result
+    results = result.results if hasattr(result, "results") else result
     if not results:
         console.print("[dim]No results found.[/dim]")
         return

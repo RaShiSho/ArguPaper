@@ -84,3 +84,23 @@ CLI 已具备 MVP 可用性：
 - `argupaper search <query>` 可返回真实检索结果
 - URL PDF 分析仍明确排除在 MVP 外
 - 深层分析质量目前仍是 MVP 级启发式实现，后续可继续替换为更强的链路与模型能力
+
+## 检索 Agent 集成完成
+
+完成时间：2026-04-22
+
+本次新增了面向 `argupaper search` 的检索 Agent，主要包括：
+
+- 将 `search` 升级为“双模式兼容”入口，同时支持纯关键词和自然语言请求
+- 新增基于弱 LLM 的请求解析层，提取关键词、数量、年份等筛选条件
+- 对“权威期刊”等模糊条件增加 CLI 二次确认，避免系统暗自猜测
+- 复用现有 Semantic Scholar / arXiv 检索链路做候选召回
+- 新增过滤层，对年份、发表源、数量等条件做结果筛选
+- 新增搜索 Agent trace 落盘，保存原始请求、解析结果、原始候选、过滤结果和最终结果
+- 新增通用 OpenAI 兼容 LLM provider 配置，为后续其他 Agent 复用做准备
+- 新增 Prompt 独立目录，避免把 Agent Prompt 硬编码在 Python 中
+
+已验证：
+
+- `uv run pytest -q`
+- 结果：`44 passed`

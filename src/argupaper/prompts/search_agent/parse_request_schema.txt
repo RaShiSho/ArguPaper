@@ -1,0 +1,28 @@
+Return a JSON object with this exact shape:
+
+{
+  "keywords": ["..."],
+  "year_from": 2024,
+  "year_to": 2026,
+  "target_count": 10,
+  "venue_policy": null,
+  "source_preference": "both",
+  "ambiguities": [
+    {
+      "field": "venue_policy",
+      "prompt": "How should the venue requirement be interpreted?",
+      "options": [
+        {"value": "strict_journal", "label": "Journal only"},
+        {"value": "authoritative_publication", "label": "Journal or top conference"},
+        {"value": "none", "label": "No venue filter"}
+      ]
+    }
+  ],
+  "parser_notes": ["..."]
+}
+
+Constraints:
+- `source_preference` must be one of: "semantic_scholar", "arxiv", "both", or null.
+- `venue_policy` must be one of: "strict_journal", "authoritative_publication", "none", or null.
+- `ambiguities` may be empty.
+- `parser_notes` may be empty.
