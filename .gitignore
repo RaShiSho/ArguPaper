@@ -59,6 +59,11 @@ Thumbs.db
 # Example
 example/
 
-#Sample
+# Sample
 sample/
 output/
+
+# OpenSpec
+openspec/
+.codex/
+.claude/
