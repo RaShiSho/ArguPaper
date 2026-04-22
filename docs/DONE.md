@@ -1,5 +1,24 @@
 # DONE
 
+## 2-Agent Debate 完成
+
+完成时间：2026-04-22
+
+本次新增并完善了 2-Agent debate 的 MVP 功能，主要包括：
+
+- 完成 `SupportAgent` 与 `SkepticAgent` 的可执行实现
+- 完成 `DebateChain` 的多轮辩论编排
+- 支持基于 `analysis` 与 `evidence` 上下文生成辩论内容
+- 支持在证据充分时第 2 轮提前收敛
+- 支持在 baseline / ablation / metrics 缺失时继续跑满配置轮数
+- 为 `AgentMessage` 与 `DebateState` 修复可变默认值问题，避免状态串联
+- 新增 `tests/chains/test_debate.py`，覆盖提前收敛、跑满轮数和状态隔离
+
+已验证：
+
+- `pytest tests/chains/test_debate.py`
+- 结果：`3 passed`
+
 ## CLI MVP 升级
 
 完成时间：2026-04-22
