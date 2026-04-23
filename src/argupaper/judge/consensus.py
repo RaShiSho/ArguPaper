@@ -68,11 +68,11 @@ class ConsensusDetector:
         disagreements.extend(contradictions[:2])
 
         if not disagreements and skeptic_messages:
-            disagreements.append(
-                self._first_sentence(
-                    skeptic_messages[-1].get("content", "Evidence adequacy remains debated.")
-                )
+            skeptic_disagreement = self._extract_skeptic_disagreement(
+                skeptic_messages[-1].get("content", "Evidence adequacy remains debated.")
             )
+            if skeptic_disagreement:
+                disagreements.append(skeptic_disagreement)
 
         supporting_evidence: list[str] = []
         if evidence.get("has_baseline"):
@@ -184,3 +184,53 @@ class ConsensusDetector:
         if sentence.endswith("."):
             return sentence
         return f"{sentence}."
+
+    def _extract_skeptic_disagreement(self, text: str) -> str | None:
+        normalized = " ".join(str(text).split()).strip()
+        if not normalized:
+            return None
+
+        positive_markers = (
+            "no major blocking gap",
+            "no blocking gap remains",
+            "no major blocker",
+            "no major blocking issue",
+            "no significant blocking issue",
+            "support case is mostly credible",
+            "support case is credible",
+            "mostly credible",
+            "overall credible",
+            "broadly convincing",
+        )
+        negative_markers = (
+            "unclear",
+            "missing",
+            "insufficient",
+            "concern",
+            "weakness",
+            "risk",
+            "gap",
+            "unsupported",
+            "contradiction",
+            "limitation",
+            "under-specified",
+            "not demonstrated",
+            "not shown",
+            "fails",
+            "failure",
+            "questionable",
+        )
+
+        sentences = [
+            self._clean_sentence(segment)
+            for segment in normalized.replace("?", ".").replace("!", ".").split(".")
+        ]
+        for sentence in sentences:
+            if not sentence:
+                continue
+            lowered = sentence.casefold()
+            if any(marker in lowered for marker in positive_markers):
+                continue
+            if any(marker in lowered for marker in negative_markers):
+                return f"{sentence}."
+        return None

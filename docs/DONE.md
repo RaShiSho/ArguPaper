@@ -1,5 +1,27 @@
 # DONE
 
+## Search / Judge / MinerU Correctness 修复
+
+完成时间：2026-04-23
+
+本次围绕 review 暴露的 4 个 correctness 问题做了集中修复，重点不是扩能力，而是把现有 `search` 和 `analyze` 主链路修回到结果可信的状态，主要包括：
+
+- 修复 `MinerUClient` 对同步返回结果的处理，提交接口内联返回 `markdown` / `content` 时不再伪造 `sync_result` 并发起无效轮询。
+- 为 `MinerUClient` 增加可配置 endpoint，`AnalyzeWorkflow` 创建 pipeline 时会显式传入 `config.pdf.api_endpoint`。
+- 修复 `SearchWorkflow` 的跨源去重逻辑，按规范化标题和 URL 联合识别重复论文，避免同一篇论文在多源检索结果中重复展示。
+- 修复 `ConsensusDetector` 的 skeptic 回退逻辑，正向结论如 `The support case is mostly credible.` / `No major blocking gap remains.` 不再被误写入 `Disagreement`。
+- 新增回归测试，覆盖 MinerU 同步返回、自定义 endpoint、生效的跨源去重，以及正向 skeptic 结论不会污染最终报告。
+
+本次验证：
+
+- `uv run --python .venv\Scripts\python.exe --no-project python -m pytest --basetemp=.pytest/cache/pytest-tmp-fix -o cache_dir=.pytest/cache tests/pdf/test_mineru_client.py::TestMinerUClient::test_submit_task_preserves_inline_markdown_response tests/pdf/test_mineru_client.py::TestMinerUClient::test_custom_endpoint_is_used_for_submit_and_status_requests tests/workflows/test_search_papers.py tests/judge/test_consensus.py tests/integration/test_analyze_workflow.py::test_analyze_workflow_build_pipeline_honors_configured_mineru_endpoint tests/integration/test_analyze_workflow.py::test_analyze_workflow_report_excludes_positive_skeptic_sentence_from_disagreement -q`
+- 结果：`6 passed`
+
+已知限制：
+
+- 当前 `.pytest/tmp` 目录存在历史 ACL 异常，按规范路径直接运行 pytest 会在创建临时目录时失败，因此本次验证临时改用 `.pytest/cache/pytest-tmp-fix` 作为 `basetemp`。
+- 当前环境中 `uv run --python .venv\Scripts\python.exe --no-project ruff check src/ tests/` 与 `uv run --python .venv\Scripts\python.exe --no-project mypy src/` 均失败，原因是 `.venv` 中不存在 `ruff` / `mypy` 可执行文件。
+
 ## 2-Agent Debate 完成
 
 完成时间：2026-04-22

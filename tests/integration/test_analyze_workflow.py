@@ -18,7 +18,11 @@ from argupaper.workflows.models import AnalyzeOptions, SearchResult, SearchWorkf
 
 def _build_config(tmp_path: Path) -> Config:
     return Config(
-        pdf=PDFConfig(api_key="test-key", cache_dir=str(tmp_path / "cache")),
+        pdf=PDFConfig(
+            api_key="test-key",
+            api_endpoint="https://mineru.example.com/v1/convert",
+            cache_dir=str(tmp_path / "cache"),
+        ),
         retrieval=RetrievalConfig(),
         model=ModelConfig(),
         search_agent=SearchAgentConfig(trace_path=str(tmp_path / "trace")),
@@ -196,6 +200,33 @@ class CapturingDebateChain:
         )
 
 
+class PositiveSkepticDebateChain:
+    """Debate stub with a positive skeptic conclusion."""
+
+    max_rounds = 1
+
+    async def run(self, initial_context: dict) -> DebateState:
+        return DebateState(
+            round=1,
+            messages=[
+                AgentMessage(
+                    agent_role="support",
+                    round=1,
+                    content="The experiments cover the main claim with strong evidence.",
+                ),
+                AgentMessage(
+                    agent_role="skeptic",
+                    round=1,
+                    content="The support case is mostly credible. No major blocking gap remains.",
+                ),
+            ],
+            current_claims=["positive skeptic conclusion"],
+            consensus_reached=True,
+            support_positions=["credible support"],
+            skeptic_positions=["no blocking issue remains"],
+        )
+
+
 def _build_workflow(
     tmp_path: Path,
     *,
@@ -215,6 +246,24 @@ def _build_workflow(
         search_workflow=search_workflow,
         pipeline_factory=StubPipeline,
     )
+
+
+def test_analyze_workflow_build_pipeline_honors_configured_mineru_endpoint() -> None:
+    workflow = AnalyzeWorkflow(
+        _build_config(Path(".pytest/cache/analyze-endpoint")),
+        extractor=StubExtractor(),
+        analysis_chain=StubAnalysisChain(),
+        evidence_chain=StubEvidenceChain(needs_supplementary_search=False),
+        debate_chain=CapturingDebateChain(),
+        consensus_detector=ConsensusDetector(),
+        report_generator=ReportGenerator(),
+        paper_store=StubPaperStore(),
+        search_workflow=StubSearchWorkflow(),
+    )
+
+    pipeline = workflow._build_pipeline()
+
+    assert pipeline.mineru.submit_url == "https://mineru.example.com/v1/convert"
 
 
 @pytest.mark.asyncio
@@ -293,3 +342,28 @@ async def test_analyze_workflow_passes_rounds_to_debate_chain(workspace_dir: Pat
 
     assert debate_chain.max_rounds == 5
     assert "round-budget:5" in result.report_markdown
+
+
+@pytest.mark.asyncio
+async def test_analyze_workflow_report_excludes_positive_skeptic_sentence_from_disagreement(
+    workspace_dir: Path,
+) -> None:
+    workflow = _build_workflow(
+        workspace_dir,
+        evidence_chain=StubEvidenceChain(needs_supplementary_search=False),
+        debate_chain=PositiveSkepticDebateChain(),
+        search_workflow=StubSearchWorkflow(),
+    )
+
+    result = await workflow.run(
+        AnalyzeOptions(
+            paper_path=workspace_dir / "paper.pdf",
+            rounds=1,
+        )
+    )
+
+    disagreement_section = result.report_markdown.split("### Disagreement", maxsplit=1)[1]
+    disagreement_section = disagreement_section.split("### Supporting Evidence", maxsplit=1)[0]
+
+    assert "The support case is mostly credible." not in disagreement_section
+    assert "No major blocking gap remains." not in disagreement_section

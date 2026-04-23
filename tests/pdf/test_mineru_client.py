@@ -1,9 +1,13 @@
 """Tests for MinerUClient."""
 
-import pytest
+from __future__ import annotations
+
 from pathlib import Path
-from argupaper.pdf.mineru_client import MinerUClient
+
+import pytest
+
 from argupaper.pdf.exceptions import PDFReadError
+from argupaper.pdf.mineru_client import MinerUClient
 
 
 @pytest.fixture
@@ -51,3 +55,50 @@ class TestMinerUClient:
         hash2 = mineru_client.compute_pdf_hash(sample_pdf_path)
 
         assert hash1 == hash2
+
+    @pytest.mark.asyncio
+    async def test_submit_task_preserves_inline_markdown_response(self) -> None:
+        """Inline MinerU responses should not be converted into fake task ids."""
+
+        client = MinerUClient(api_key="test-api-key")
+        request_calls: list[tuple[str, str]] = []
+
+        async def fake_make_request(method: str, url: str, json_data=None, timeout: int = 30) -> dict:
+            request_calls.append((method, url))
+            return {"code": 0, "data": {"markdown": "# Inline Markdown"}}
+
+        client._make_request = fake_make_request  # type: ignore[method-assign]
+
+        task_or_result = await client.submit_task("https://example.com/paper.pdf")
+        result = await client.wait_for_completion(task_or_result)
+
+        assert result.markdown == "# Inline Markdown"
+        assert request_calls == [("POST", client.submit_url)]
+
+    @pytest.mark.asyncio
+    async def test_custom_endpoint_is_used_for_submit_and_status_requests(self) -> None:
+        """Configured endpoint should be used instead of the hard-coded default."""
+
+        client = MinerUClient(
+            api_key="test-api-key",
+            api_endpoint="https://mineru.example.com/v1/convert/",
+        )
+        request_calls: list[tuple[str, str]] = []
+
+        async def fake_make_request(method: str, url: str, json_data=None, timeout: int = 30) -> dict:
+            request_calls.append((method, url))
+            if method == "POST":
+                return {"code": 0, "data": {"task_id": "task-123"}}
+            return {"code": 0, "data": {"status": "success", "markdown": "# Completed"}}
+
+        client._make_request = fake_make_request  # type: ignore[method-assign]
+
+        task_id = await client.submit_task("https://example.com/paper.pdf")
+        result = await client.wait_for_completion(task_id)
+
+        assert client.submit_url == "https://mineru.example.com/v1/convert"
+        assert result.markdown == "# Completed"
+        assert request_calls == [
+            ("POST", "https://mineru.example.com/v1/convert"),
+            ("GET", "https://mineru.example.com/v1/convert/task-123"),
+        ]

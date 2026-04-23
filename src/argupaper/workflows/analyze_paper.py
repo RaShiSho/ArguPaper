@@ -211,6 +211,7 @@ class AnalyzeWorkflow:
         mineru_client = MinerUClient(
             api_key=self.config.pdf.api_key,
             model_version="vlm",
+            api_endpoint=self.config.pdf.api_endpoint,
         )
         cache = MarkdownCache(cache_dir=self.config.pdf.cache_dir)
         return PDFPipeline(

@@ -1,20 +1,19 @@
 """MinerU API client for PDF to Markdown conversion."""
 
-import hashlib
 import asyncio
+import hashlib
 import time
 from pathlib import Path
 from typing import Optional
 
 import aiohttp
 
-from argupaper.pdf.types import ConversionResult, TaskStatus, MinerUResponse
+from argupaper.pdf.types import ConversionResult, TaskStatus
 from argupaper.pdf.exceptions import (
     RateLimitError,
     ConversionError,
     ConversionTimeoutError,
     PDFReadError,
-    URLUploadError,
 )
 
 
@@ -23,9 +22,15 @@ class MinerUClient:
 
     SUBMIT_URL = "https://mineru.net/api/v4/extract/task"
 
-    def __init__(self, api_key: str, model_version: str = "vlm"):
+    def __init__(
+        self,
+        api_key: str,
+        model_version: str = "vlm",
+        api_endpoint: str | None = None,
+    ):
         self.api_key = api_key
         self.model_version = model_version
+        self.submit_url = (api_endpoint or self.SUBMIT_URL).rstrip("/")
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -102,14 +107,14 @@ class MinerUClient:
         except aiohttp.ClientError as e:
             raise ConversionError(f"Network error: {e}")
 
-    async def submit_task(self, pdf_url: str) -> str:
-        """Submit a conversion task and return task_id.
+    async def submit_task(self, pdf_url: str) -> str | dict:
+        """Submit a conversion task and return task_id or inline result payload.
 
         Args:
             pdf_url: URL where the PDF can be accessed
 
         Returns:
-            task_id: The ID of the submitted task
+            task_id or inline result payload
 
         Raises:
             RateLimitError: If API rate limit is exceeded
@@ -120,24 +125,18 @@ class MinerUClient:
             "model_version": self.model_version,
         }
 
-        response = await self._make_request("POST", self.SUBMIT_URL, json_data=request_body)
+        response = await self._make_request("POST", self.submit_url, json_data=request_body)
         print(f"[DEBUG] submit_task response: {response}")
 
-        # Try to extract task_id from response
-        # Based on typical API patterns, the response might contain:
-        # {"data": {"task_id": "..."}} or just {"task_id": "..."}
-        data = response.get("data", {})
+        data = self._extract_payload(response)
         if isinstance(data, dict):
             task_id = data.get("task_id") or data.get("id")
             if task_id:
                 return str(task_id)
 
-        # If no task_id found, check if it's a synchronous response (data contains result directly)
-        if data and isinstance(data, dict):
-            # Check if it contains markdown directly (synchronous response)
-            if "markdown" in data or "content" in data:
-                # Return a special marker for synchronous completion
-                return "sync_result"
+        inline_result = self._extract_inline_result(response)
+        if inline_result is not None:
+            return inline_result
 
         raise ConversionError(
             "Could not extract task_id from response",
@@ -153,14 +152,14 @@ class MinerUClient:
         Returns:
             dict containing the conversion result
         """
-        status_url = f"{self.SUBMIT_URL}/{task_id}"
+        status_url = f"{self.submit_url}/{task_id}"
         print(f"[DEBUG] Polling status URL: {status_url}")
         response = await self._make_request("GET", status_url)
-        return response.get("data", response)
+        return self._extract_payload(response)
 
     async def wait_for_completion(
         self,
-        task_id: str,
+        task_id: str | dict,
         poll_interval: float = 2.0,
         max_wait_time: float = 300.0,
     ) -> ConversionResult:
@@ -178,14 +177,8 @@ class MinerUClient:
             ConversionTimeoutError: If task doesn't complete within timeout
             ConversionError: If task fails
         """
-        if task_id == "sync_result":
-            # Task was completed synchronously, get result directly
-            result = await self.get_task_result("sync_result")
-            return ConversionResult(
-                status=TaskStatus.SUCCESS,
-                markdown=result.get("markdown") or result.get("content", ""),
-                cache_key="",  # Will be set by caller
-            )
+        if isinstance(task_id, dict):
+            return await self._build_success_result(task_id)
 
         start_time = time.time()
         print(f"[DEBUG] Starting to poll for task: {task_id}")
@@ -200,22 +193,7 @@ class MinerUClient:
 
             # Check for completion states
             if state in ("SUCCESS", "success", "done"):
-                # Download the result ZIP and extract markdown
-                zip_url = result.get("full_zip_url")
-                if zip_url:
-                    markdown = await self._download_and_extract_markdown(zip_url)
-                    return ConversionResult(
-                        status=TaskStatus.SUCCESS,
-                        markdown=markdown,
-                        cache_key="",  # Will be set by caller
-                    )
-                else:
-                    # Fallback to direct content if available
-                    return ConversionResult(
-                        status=TaskStatus.SUCCESS,
-                        markdown=result.get("markdown") or result.get("content", ""),
-                        cache_key="",
-                    )
+                return await self._build_success_result(result)
 
             if state in ("FAILED", "failed", "error"):
                 error_msg = result.get("error_msg") or result.get("err_msg") or result.get("message") or "Unknown error"
@@ -287,6 +265,33 @@ class MinerUClient:
         task_id = await self.submit_task(pdf_url)
         result = await self.wait_for_completion(task_id, poll_interval, max_wait_time)
         return result
+
+    def _extract_payload(self, response: dict) -> dict:
+        data = response.get("data")
+        if isinstance(data, dict):
+            return data
+        return response
+
+    def _extract_inline_result(self, response: dict) -> dict | None:
+        for payload in (self._extract_payload(response), response):
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("markdown") or payload.get("content"):
+                return payload
+            if payload.get("state") in ("SUCCESS", "success", "done") and payload.get("full_zip_url"):
+                return payload
+        return None
+
+    async def _build_success_result(self, payload: dict) -> ConversionResult:
+        zip_url = payload.get("full_zip_url")
+        markdown = str(payload.get("markdown") or payload.get("content") or "")
+        if zip_url:
+            markdown = await self._download_and_extract_markdown(str(zip_url))
+        return ConversionResult(
+            status=TaskStatus.SUCCESS,
+            markdown=markdown,
+            cache_key="",
+        )
 
     async def close(self) -> None:
         """Close the HTTP session."""

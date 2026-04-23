@@ -96,12 +96,51 @@ class SearchWorkflow:
 
     def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
         deduped: dict[str, SearchResult] = {}
-        for result in results:
-            key = result.url or result.title.strip().lower()
-            existing = deduped.get(key)
-            if existing is None or result.citation_count > existing.citation_count:
-                deduped[key] = result
+        alias_to_canonical: dict[str, str] = {}
+
+        for index, result in enumerate(results):
+            aliases = [
+                alias
+                for alias in (
+                    self._dedupe_alias("title", result.title),
+                    self._dedupe_alias("url", result.url),
+                )
+                if alias
+            ]
+            matched_canonicals = {
+                alias_to_canonical[alias]
+                for alias in aliases
+                if alias in alias_to_canonical
+            }
+            canonical = next(
+                (alias_to_canonical[alias] for alias in aliases if alias in alias_to_canonical),
+                aliases[0] if aliases else f"result:{index}",
+            )
+
+            best_result = result
+            for matched_key in matched_canonicals:
+                existing = deduped.get(matched_key)
+                if existing is not None and existing.citation_count > best_result.citation_count:
+                    best_result = existing
+
+            deduped[canonical] = best_result
+
+            merged_keys = matched_canonicals - {canonical}
+            for merged_key in merged_keys:
+                deduped.pop(merged_key, None)
+                for alias, alias_canonical in list(alias_to_canonical.items()):
+                    if alias_canonical == merged_key:
+                        alias_to_canonical[alias] = canonical
+
+            for alias in aliases:
+                alias_to_canonical[alias] = canonical
         return list(deduped.values())
+
+    def _dedupe_alias(self, kind: str, value: str) -> str:
+        normalized = " ".join(str(value).strip().casefold().split())
+        if not normalized:
+            return ""
+        return f"{kind}:{normalized}"
 
     def _rank_results(self, results: list[SearchResult], query: str) -> list[SearchResult]:
         query_tokens = {token for token in query.lower().split() if token}
