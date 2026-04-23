@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -28,20 +26,6 @@ def _build_config(tmp_path: Path) -> Config:
         data_path=str(tmp_path / "data"),
         analyze_enable_retrieval_loop=True,
     )
-
-
-@pytest.fixture
-def workspace_dir() -> Path:
-    """Create a manual workspace without relying on pytest tmp_path."""
-
-    root = Path.cwd() / "test_workspace"
-    root.mkdir(parents=True, exist_ok=True)
-    path = Path(tempfile.mkdtemp(prefix="analyze_", dir=root))
-    try:
-        yield path
-    finally:
-        shutil.rmtree(path, ignore_errors=True)
-
 
 class StubPipeline:
     """Simple pipeline stub returning canned markdown."""

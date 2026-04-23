@@ -68,7 +68,7 @@ class StubSearchAgentWorkflow:
             expanded_queries=[options.query, f"{options.query} expansion"],
             source_stats={"arxiv": len(self._results)},
             warnings=self._warnings,
-            trace_dir=str(Path.cwd() / "data" / "agent_runs" / "search" / "stub"),
+            trace_dir=str(Path.cwd() / ".pytest" / "workspace" / "agent_runs" / "search" / "stub"),
             parse_result=SearchParseResult(
                 raw_request=options.raw_request or options.query,
                 filters=SearchFilters(keywords=[options.query], target_count=options.limit),
