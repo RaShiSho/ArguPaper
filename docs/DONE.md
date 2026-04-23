@@ -104,3 +104,30 @@ CLI 已具备 MVP 可用性：
 
 - `uv run pytest -q`
 - 结果：`44 passed`
+
+## Analyze 主链路稳定性增强
+
+完成时间：2026-04-22
+
+本次围绕 `argupaper analyze` 主链路做了稳定性收口，重点不是扩展更多 Agent，而是让当前链路更可解释、更可降级、更可验证，主要包括：
+
+- 强化 `AnalyzeWorkflow` 的主链路契约，统一 judge/report 使用的中间结果结构
+- 为 supplementary retrieval、debate、judge、report 增加显式 warning 汇总与局部失败降级
+- 重写 `ConsensusDetector`，让共识、分歧、supporting evidence、confidence、conflict intensity 基于 debate/evidence/supplementary retrieval 信号生成
+- 重构 `ReportGenerator`，让 `Method Comparison`、`Debate Summary`、`Consensus vs Disagreement`、`Warnings` 结构化输出
+- 新增 `tests/integration/test_analyze_workflow.py`，覆盖 happy path、降级路径与 `rounds` 参数传递
+
+当前收益：
+
+- `argupaper analyze` 在局部失败时不再轻易整体中断
+- 报告中的 debate 与 judge 信息更清晰，warning 能直接暴露给用户
+- analyze 主链路具备基础集成测试，便于后续继续增强 Judge、Report 和 Debate
+
+本次验证：
+
+- `uv run pytest tests/integration/test_analyze_workflow.py tests/chains/test_debate.py -q`
+- 结果：`6 passed`
+
+已知限制：
+
+- 当前环境中 `uv run ruff` 与 `uv run mypy` 命令不可用，因此未完成静态检查验证
