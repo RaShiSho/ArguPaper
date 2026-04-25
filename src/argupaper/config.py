@@ -72,6 +72,7 @@ class Config(BaseModel):
     search_agent: SearchAgentConfig = SearchAgentConfig()
     debate: DebateConfig = DebateConfig()
     data_path: str = "./data"
+    paper_storage_path: str = "./data/papers"
     analyze_enable_retrieval_loop: bool = True
 
 
@@ -121,10 +122,12 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
     pdf_endpoint = os.getenv("MINERU_API_ENDPOINT", "https://mineru.net/api/v4/extract/task")
     pdf_cache_dir = os.getenv("CACHE_PATH", "./data/cache")
     data_path = os.getenv("DATA_PATH", "./data")
+    paper_storage_path = os.getenv("PAPER_STORAGE_PATH", str(Path(data_path) / "papers"))
     search_agent_trace_path = os.getenv("SEARCH_AGENT_TRACE_PATH", "./data/agent_runs/search")
 
     Path(pdf_cache_dir).mkdir(parents=True, exist_ok=True)
     Path(data_path).mkdir(parents=True, exist_ok=True)
+    Path(paper_storage_path).mkdir(parents=True, exist_ok=True)
     Path(search_agent_trace_path).mkdir(parents=True, exist_ok=True)
 
     return Config(
@@ -155,6 +158,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
             max_rounds=int(os.getenv("DEBATE_MAX_ROUNDS", "3")),
         ),
         data_path=data_path,
+        paper_storage_path=paper_storage_path,
         analyze_enable_retrieval_loop=(
             os.getenv("ANALYZE_ENABLE_RETRIEVAL_LOOP", "true").lower() == "true"
         ),

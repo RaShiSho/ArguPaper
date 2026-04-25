@@ -59,6 +59,7 @@ PAPER_STORAGE_PATH=./data/papers
 - `NGROK_URL_BASE`：对未缓存的本地 PDF 分析，当前实现实际上是前置条件，不只是普通可选项。
 - 原因是当前流程会把本地 PDF 通过临时 HTTP 服务暴露给远端 MinerU；远端服务无法访问调用机器上的 `localhost`。
 - 如果未配置 `NGROK_URL_BASE`，`argupaper analyze ./paper.pdf` 只有在命中本地缓存时才可能成功；未命中缓存时默认会失败。
+- `PAPER_STORAGE_PATH`：本地论文记录保存目录；未配置时默认为 `DATA_PATH/papers`。
 
 ### `search` 可选配置
 
@@ -119,7 +120,7 @@ uv run argupaper papers <paper_id_or_hash_prefix> --report
 
 说明：
 
-- `papers` 默认读取 `DATA_PATH/papers` 下的本地记录。
+- `papers` 默认读取 `PAPER_STORAGE_PATH` 下的本地记录。
 - `paper_id` 支持完整 ID 或唯一 hash 前缀。
 - `--report` 会渲染保存的 Markdown 报告；`--markdown` 会渲染缓存的论文 Markdown。
 

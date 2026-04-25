@@ -1,5 +1,22 @@
 # DONE
 
+## 配置项与环境变量模板同步完成
+
+完成时间：2026-04-25
+
+本次对齐了 `config.py`、`.env.example` 与 README 中的配置项说明，减少隐式配置和文档漂移。
+
+主要调整：
+
+- 新增 `Config.paper_storage_path`，代码现在会读取 `PAPER_STORAGE_PATH`，未配置时回退到 `DATA_PATH/papers`。
+- `AnalyzeWorkflow` 与 `argupaper papers` 统一使用 `config.paper_storage_path` 访问本地论文记录。
+- `.env.example` 补齐 `SEARCH_DEFAULT_LIMIT`、`SEARCH_MAX_RESULTS` 与 `ANALYZE_ENABLE_RETRIEVAL_LOOP`。
+- README 更新 `PAPER_STORAGE_PATH` 的实际语义，避免继续写成未生效配置。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的配置项读取表单执行手工验收。
+
 ## CLI 错误处理与空内容降级提示收口
 
 完成时间：2026-04-25

@@ -63,7 +63,7 @@ def build_paper_store() -> PaperStore:
     """Construct the default local paper store."""
 
     config = load_config(require_pdf_api_key=False)
-    return PaperStore(storage_path=Path(config.data_path) / "papers")
+    return PaperStore(storage_path=config.paper_storage_path)
 
 
 def analyze(

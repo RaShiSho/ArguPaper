@@ -145,3 +145,26 @@ Remove-Item -Force $tmp
 
 - 预期结果：命令以退出码 `1` 失败；错误面板包含 `InputValidationError`、`Input must be a .pdf file.` 与 `Next step`
 - 记录：____
+
+### 7. 配置项读取
+
+- 功能名称：环境变量模板与配置读取一致性
+- 适用场景：验证 `PAPER_STORAGE_PATH` 与检索配置项会被 `load_config()` 读取
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+$env:PAPER_STORAGE_PATH = Join-Path $env:TEMP "argupaper-config-paper-store"
+$env:SEARCH_DEFAULT_LIMIT = "7"
+$env:SEARCH_MAX_RESULTS = "13"
+$env:ANALYZE_ENABLE_RETRIEVAL_LOOP = "false"
+uv run python -c "from argupaper.config import load_config; c=load_config(require_pdf_api_key=False); print(c.paper_storage_path); print(c.retrieval.default_limit, c.retrieval.max_results); print(c.analyze_enable_retrieval_loop)"
+Remove-Item -Recurse -Force $env:PAPER_STORAGE_PATH
+Remove-Item Env:PAPER_STORAGE_PATH
+Remove-Item Env:SEARCH_DEFAULT_LIMIT
+Remove-Item Env:SEARCH_MAX_RESULTS
+Remove-Item Env:ANALYZE_ENABLE_RETRIEVAL_LOOP
+```
+
+- 预期结果：输出的 paper storage 路径与 `$env:PAPER_STORAGE_PATH` 一致；第二行输出 `7 13`；第三行输出 `False`
+- 记录：____

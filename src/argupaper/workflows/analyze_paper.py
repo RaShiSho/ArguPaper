@@ -44,7 +44,7 @@ class AnalyzeWorkflow:
         self.debate_chain = debate_chain or DebateChain(max_rounds=config.debate.max_rounds)
         self.consensus_detector = consensus_detector or ConsensusDetector()
         self.report_generator = report_generator or ReportGenerator()
-        self.paper_store = paper_store or PaperStore(storage_path=Path(config.data_path) / "papers")
+        self.paper_store = paper_store or PaperStore(storage_path=config.paper_storage_path)
         self.search_workflow = search_workflow or SearchWorkflow(config)
         self.pipeline_factory = pipeline_factory
 
