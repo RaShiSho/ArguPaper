@@ -46,7 +46,7 @@
   验收：可识别 unsupported claims、缺 baseline、缺 ablation。
 - `P0` T205 将 PDFPipeline 与抽取/分析链路接入 `analyze` workflow。
   验收：本地 PDF 可生成非占位的中间分析结果。
-- `P1` T206 针对 PDF 结构不完整、Markdown 为空、抽取字段缺失做降级逻辑。
+- `[DONE] P1` T206 针对 PDF 结构不完整、Markdown 为空、抽取字段缺失做降级逻辑。
   验收：失败时仍输出最小化报告或明确错误。
 
 ## Milestone 3：Debate、Judge 与报告生成

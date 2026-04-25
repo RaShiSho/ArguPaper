@@ -205,3 +205,56 @@ asyncio.run(main())
 
 - 预期结果：第一行输出 `2`；后两行分别包含 `Support fallback` 与 `Skeptic fallback`
 - 记录：____
+
+### 9. Analyze 空 Markdown 降级
+
+- 功能名称：Analyze 空内容与抽取缺失 warning
+- 适用场景：验证 PDF 转换返回空 Markdown 时，workflow 仍返回最小报告并暴露降级原因
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+import shutil
+import tempfile
+from pathlib import Path
+
+from argupaper.config import Config, PDFConfig
+from argupaper.pdf.types import ConversionResult, TaskStatus
+from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow
+
+class EmptyPipeline:
+    async def process(self, paper_path, force_reconvert=False):
+        return ConversionResult(
+            status=TaskStatus.SUCCESS,
+            markdown="",
+            cache_key="empty-smoke",
+            from_cache=False,
+        )
+
+    async def close(self):
+        return None
+
+async def main():
+    data_dir = Path(tempfile.mkdtemp(prefix="argupaper-empty-md-"))
+    try:
+        config = Config(
+            pdf=PDFConfig(api_key="fake"),
+            data_path=str(data_dir),
+            paper_storage_path=str(data_dir / "papers"),
+        )
+        workflow = AnalyzeWorkflow(config, pipeline_factory=lambda: EmptyPipeline())
+        result = await workflow.run(AnalyzeOptions(paper_path=Path("empty.pdf"), rounds=1))
+        print(result.paper_id)
+        for warning in result.warnings:
+            print(warning)
+    finally:
+        shutil.rmtree(data_dir, ignore_errors=True)
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：输出 `empty-smoke`；warning 中包含 `PDF conversion returned empty Markdown`、`Structured extraction missing fields` 和 `Supplementary retrieval skipped`
+- 记录：____

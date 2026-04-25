@@ -1,5 +1,22 @@
 # DONE
 
+## Analyze 空内容与抽取缺失降级提示完成
+
+完成时间：2026-04-25
+
+本次补齐了 analyze 主链路对空 Markdown 和结构化抽取缺失字段的显式 warning，避免报告在使用 fallback 默认值时缺少可解释原因。
+
+主要调整：
+
+- PDF 转换返回空 Markdown 时，`AnalyzeWorkflow` 会输出 `PDF conversion returned empty Markdown` warning。
+- 结构化抽取缺少 Problem / Method / Experiment / Conclusion 字段时，会列出缺失字段。
+- Method details 为空时会输出独立 warning。
+- 空 Markdown 场景会跳过补充检索，避免用无意义内容触发外部搜索。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 Analyze 空 Markdown 降级表单执行手工验收。
+
 ## Debate 单角色异常兜底完成
 
 完成时间：2026-04-25

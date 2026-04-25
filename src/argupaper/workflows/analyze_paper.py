@@ -80,6 +80,19 @@ class AnalyzeWorkflow:
         structured = await self.extractor.extract_abstract(markdown)
         method_info = await self.extractor.extract_method(markdown)
         experiments = await self.extractor.extract_experiments(markdown)
+        missing_structured_fields = [
+            field
+            for field in ("problem", "method", "experiment", "conclusion")
+            if not str(structured.get(field, "")).strip()
+        ]
+        if missing_structured_fields:
+            warnings.append(
+                "Structured extraction missing fields: "
+                + ", ".join(missing_structured_fields)
+                + "."
+            )
+        if not str(method_info.get("details", "")).strip():
+            warnings.append("Method extraction returned no method details.")
 
         if progress_callback:
             progress_callback("Running analysis...")
