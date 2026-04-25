@@ -73,9 +73,15 @@ class SearchRequestParser:
         self.config = config
         self.llm_router = llm_router
         prompts_dir = Path(__file__).resolve().parents[1] / "prompts" / "search_agent"
+        current_date = datetime.now().strftime("%Y-%m-%d")
         self.system_prompt = "\n\n".join(
             [
                 prompts_dir.joinpath("parse_request_system.txt").read_text(encoding="utf-8").strip(),
+                (
+                    f"Current local date: {current_date}. "
+                    "Resolve relative time expressions such as '近一年', '最近一年', "
+                    "'过去一年', and 'last year' against this date."
+                ),
                 prompts_dir.joinpath("parse_request_schema.txt").read_text(encoding="utf-8").strip(),
             ]
         )
@@ -112,6 +118,14 @@ class SearchRequestParser:
             venue_policy=payload.get("venue_policy"),
             source_preference=payload.get("source_preference"),
         )
+        relative_year_note = self._normalize_relative_year_filters(raw_request, filters)
+        parser_notes = [
+            str(item).strip()
+            for item in payload.get("parser_notes", [])
+            if str(item).strip()
+        ]
+        if relative_year_note is not None:
+            parser_notes.append(relative_year_note)
         return SearchParseResult(
             raw_request=raw_request,
             filters=filters,
@@ -132,17 +146,12 @@ class SearchRequestParser:
                 if str(item.get("field", "")).strip() and str(item.get("prompt", "")).strip()
             ],
             parser="weak_llm",
-            parser_notes=[
-                str(item).strip()
-                for item in payload.get("parser_notes", [])
-                if str(item).strip()
-            ],
+            parser_notes=parser_notes,
         )
 
     def _parse_with_heuristic(self, raw_request: str) -> SearchParseResult:
         text = raw_request.strip()
         lowered = text.lower()
-        current_year = datetime.now().year
 
         filters = SearchFilters()
         notes: list[str] = []
@@ -151,18 +160,9 @@ class SearchRequestParser:
         if count_match:
             filters.target_count = int(count_match.group(1))
 
-        recent_year_match = re.search(r"近\s*(\d+)\s*年", text)
-        if recent_year_match:
-            year_window = int(recent_year_match.group(1))
-            filters.year_from = current_year - year_window + 1
-            filters.year_to = current_year
-
-        if "近两年" in text:
-            filters.year_from = current_year - 1
-            filters.year_to = current_year
-        elif "近三年" in text:
-            filters.year_from = current_year - 2
-            filters.year_to = current_year
+        relative_year_note = self._normalize_relative_year_filters(text, filters)
+        if relative_year_note is not None:
+            notes.append(relative_year_note)
 
         if "semantic scholar" in lowered:
             filters.source_preference = "semantic_scholar"
@@ -187,6 +187,60 @@ class SearchRequestParser:
             ambiguities=ambiguities,
             parser="heuristic",
             parser_notes=notes,
+        )
+
+    def _normalize_relative_year_filters(self, raw_request: str, filters: SearchFilters) -> str | None:
+        """Resolve relative year phrases against the current local date."""
+
+        current_year = datetime.now().year
+        text = raw_request.strip()
+        lowered = text.lower()
+
+        explicit_windows = {
+            "近一年": 1,
+            "最近一年": 1,
+            "过去一年": 1,
+            "近两年": 2,
+            "最近两年": 2,
+            "过去两年": 2,
+            "近三年": 3,
+            "最近三年": 3,
+            "过去三年": 3,
+        }
+        for phrase, window in explicit_windows.items():
+            if phrase in text:
+                return self._apply_relative_year_window(filters, window, current_year)
+
+        if re.search(r"\b(?:last|past|recent)\s+year\b", lowered):
+            return self._apply_relative_year_window(filters, 1, current_year)
+
+        english_match = re.search(r"\b(?:last|past|recent)\s+(\d+)\s+years?\b", lowered)
+        if english_match:
+            return self._apply_relative_year_window(filters, int(english_match.group(1)), current_year)
+
+        chinese_match = re.search(r"(?:近|最近|过去)\s*(\d+)\s*年", text)
+        if chinese_match:
+            return self._apply_relative_year_window(filters, int(chinese_match.group(1)), current_year)
+
+        return None
+
+    def _apply_relative_year_window(
+        self,
+        filters: SearchFilters,
+        year_window: int,
+        current_year: int,
+    ) -> str | None:
+        """Apply one relative year window to the parsed filters."""
+
+        if year_window <= 0:
+            return None
+
+        year_from = current_year - year_window if year_window == 1 else current_year - year_window + 1
+        filters.year_from = year_from
+        filters.year_to = current_year
+        return (
+            f"Normalized relative year expression against current date: "
+            f"year_from={filters.year_from}, year_to={filters.year_to}."
         )
 
     def _extract_keywords(self, raw_request: str) -> list[str]:

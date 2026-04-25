@@ -2,8 +2,8 @@ Return a JSON object with this exact shape:
 
 {
   "keywords": ["..."],
-  "year_from": 2024,
-  "year_to": 2026,
+  "year_from": null,
+  "year_to": null,
   "target_count": 10,
   "venue_policy": null,
   "source_preference": "both",
