@@ -33,26 +33,44 @@ pip install -e .
 cp .env.example .env
 ```
 
-最少需要关注这些配置：
+### `analyze` 前置配置
+
+当前 `analyze` 依赖远端 MinerU 服务处理 PDF。最少需要关注这些配置：
 
 ```env
 # analyze 必需
 MINERU_API_KEY=your_api_key_here
+MINERU_API_ENDPOINT=https://api.mineru.cn/v1/convert
 
-# search 可选；配置后可提升 Semantic Scholar 检索能力
-SEMANTIC_SCHOLAR_API_KEY=your_api_key_here
+# analyze 未命中缓存时，当前实现需要可被 MinerU 访问的公网地址
+NGROK_URL_BASE=https://your-ngrok-url.ngrok-free.dev
 
 # 本地存储
 DATA_PATH=./data
 CACHE_PATH=./data/cache
-
-# 可选：当 MinerU 需要回调本地 PDF 服务时使用
-NGROK_URL_BASE=https://your-ngrok-url.ngrok-free.dev
+PAPER_STORAGE_PATH=./data/papers
 ```
 
-常用可选项：
+说明：
+
+- `MINERU_API_KEY`：必需。
+- `MINERU_API_ENDPOINT`：MinerU 服务地址，建议与 [`.env.example`](/E:/Code/Project/ArguPaper/.env.example) 保持一致。
+- `NGROK_URL_BASE`：对未缓存的本地 PDF 分析，当前实现实际上是前置条件，不只是普通可选项。
+- 原因是当前流程会把本地 PDF 通过临时 HTTP 服务暴露给远端 MinerU；远端服务无法访问调用机器上的 `localhost`。
+- 如果未配置 `NGROK_URL_BASE`，`argupaper analyze ./paper.pdf` 只有在命中本地缓存时才可能成功；未命中缓存时默认会失败。
+
+### `search` 可选配置
 
 ```env
+# 配置后可提升 Semantic Scholar 检索能力
+SEMANTIC_SCHOLAR_API_KEY=your_api_key_here
+```
+
+### 常用可选项
+
+```env
+SEARCH_AGENT_TRACE_PATH=./data/agent_runs/search
+SEARCH_AGENT_MAX_CANDIDATES=50
 DEBATE_MAX_ROUNDS=3
 SEARCH_DEFAULT_LIMIT=10
 SEARCH_MAX_RESULTS=20
@@ -73,11 +91,22 @@ argupaper --help
 argupaper search "retrieval augmented generation" --limit 10 --source both
 ```
 
+说明：
+
+- `--source both` 当前会聚合多个来源的结果并排序返回。
+- 但当前去重逻辑仍存在已知限制：在同标题但实际不是同一篇论文的场景下，可能发生误合并。
+
 分析本地 PDF：
 
 ```bash
 argupaper analyze ./paper.pdf --output report.md --rounds 2
 ```
+
+运行前请确认：
+
+- 已配置 `MINERU_API_KEY`
+- 已配置 `MINERU_API_ENDPOINT`
+- 对未缓存 PDF，已配置 `NGROK_URL_BASE` 或其他可公开访问本地 PDF 的隧道地址
 
 查看版本：
 
@@ -89,3 +118,10 @@ argupaper --version
 
 - `analyze` 当前只支持本地 PDF，不支持直接传 URL
 - 输出报告会写到 `--output` 指定路径；同时分析结果会落到 `data/` 目录下
+
+## 已知限制
+
+- 未缓存本地 PDF 的 `analyze` 目前依赖外部隧道。未配置 `NGROK_URL_BASE` 时，远端 MinerU 无法访问本地 `localhost` URL。
+- `search --source both` 当前支持多源聚合，但去重仍不是严格正确的，在同标题不同论文场景下可能误合并结果。
+- `strict_journal` 和 `authoritative_publication` 当前基于 venue 名称做启发式过滤，不保证完整覆盖真实期刊。
+- 像 `Nature`、`Science`、`Cell`、`PNAS` 这类不含通用期刊关键词的 venue，当前可能被错误过滤掉。
