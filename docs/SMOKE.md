@@ -65,3 +65,38 @@
 - 执行命令：`uv run argupaper analyze ./paper.pdf --output report.md --rounds 2`
 - 预期结果：成功生成 Markdown 报告；报告中应能看到与当前轮数一致的 debate 输出；若外部服务异常，应给出可见错误或 warning，而不是静默失败；`Disagreement` 不应出现明显正向结论
 - 记录：____
+
+### 4.1 Claim-Evidence 对齐
+
+- 功能名称：Claim-Evidence 对齐与证据充分性检查
+- 适用场景：验证 evidence 链路可识别 claim 支撑、baseline、ablation 与缺失项
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+from argupaper.chains.evidence import EvidenceChain
+
+markdown = """# Demo Paper
+
+## Abstract
+We propose a robust retrieval model that improves accuracy on benchmark tasks.
+
+## Evaluation
+We compare against a baseline on CIFAR-10 and report accuracy and f1.
+Ablation variants remove the reranker component.
+"""
+
+async def main():
+    result = await EvidenceChain().run(markdown)
+    print(result["has_baseline"], result["has_ablation"])
+    print(result["unsupported_claims"])
+    print(result["missing_analyses"])
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：第一行输出 `True True`；`unsupported_claims` 为空列表；`missing_analyses` 为空列表
+- 记录：____

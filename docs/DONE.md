@@ -1,5 +1,23 @@
 # DONE
 
+## Claim-Evidence 对齐与证据充分性检查完成
+
+完成时间：2026-04-25
+
+本次补齐了 `ClaimChecker` 的 MVP 规则实现，并将其接入 `EvidenceChain`，让 analyze 主链路可以产出 `claims`、`aligned_claims`、`unsupported_claims`、`contradictions` 与 `missing_analyses` 等结构化信号。
+
+主要调整：
+
+- 实现 claim 文本抽取、证据文本归一化、token overlap 对齐、强 claim 直接证据检查和正反向证据冲突识别。
+- 实现 evidence sufficiency 检查，显式识别 dataset、metric、baseline、ablation 缺口。
+- `EvidenceChain` 会从 Abstract / Introduction / Conclusion 中抽取候选 claim，并把 claim-evidence 结果传给 debate、judge 与报告链路。
+- 修复 `agents`、`chains`、`workflows` 包级重导出导致的循环导入问题，改为懒加载导出，保证单模块导入可用。
+- `docs/TASKS.md` 与 `docs/SMOKE.md` 已同步补充本次变更。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 Claim-Evidence 对齐表单执行手工验收。
+
 ## 搜索相对年份解析修复
 
 完成时间：2026-04-25

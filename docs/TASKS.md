@@ -42,7 +42,7 @@
   验收：输出研究问题、方法原理、技术路线等结构化分析内容。
 - `P0` T203 实现 [evidence.py](/E:/Code/Project/ArguPaper/src/argupaper/chains/evidence.py)。
   验收：输出数据集、指标、实验设置、主要证据判断。
-- `P0` T204 实现 [claim_checker.py](/E:/Code/Project/ArguPaper/src/argupaper/extraction/claim_checker.py) 的 claim-evidence 对齐与充分性检查。
+- `[DONE] P0` T204 实现 [claim_checker.py](/E:/Code/Project/ArguPaper/src/argupaper/extraction/claim_checker.py) 的 claim-evidence 对齐与充分性检查。
   验收：可识别 unsupported claims、缺 baseline、缺 ablation。
 - `P0` T205 将 PDFPipeline 与抽取/分析链路接入 `analyze` workflow。
   验收：本地 PDF 可生成非占位的中间分析结果。
