@@ -70,6 +70,10 @@ class AnalyzeWorkflow:
 
         markdown = result.markdown or ""
         paper_id = result.cache_key
+        if not markdown.strip():
+            warnings.append(
+                "PDF conversion returned empty Markdown; downstream analysis used fallback defaults."
+            )
 
         if progress_callback:
             progress_callback("Extracting structure...")
@@ -87,7 +91,11 @@ class AnalyzeWorkflow:
 
         supplementary_search_used = False
         supplementary_results: list[dict] = []
-        if self.config.analyze_enable_retrieval_loop and evidence.get("needs_supplementary_search"):
+        if (
+            self.config.analyze_enable_retrieval_loop
+            and evidence.get("needs_supplementary_search")
+            and markdown.strip()
+        ):
             if progress_callback:
                 progress_callback("Running supplementary retrieval...")
             try:
@@ -100,6 +108,8 @@ class AnalyzeWorkflow:
                 warnings.extend(search_result.warnings)
             except Exception as exc:
                 warnings.append(f"Supplementary retrieval failed: {exc}")
+        elif evidence.get("needs_supplementary_search") and not markdown.strip():
+            warnings.append("Supplementary retrieval skipped because Markdown content is empty.")
 
         if progress_callback:
             progress_callback("Running debate...")

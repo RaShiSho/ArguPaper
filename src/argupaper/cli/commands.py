@@ -28,6 +28,8 @@ from argupaper.memory.paper_store import PaperStore
 from argupaper.workflows import (
     AnalyzeOptions,
     AnalyzeWorkflow,
+    ExternalServiceError,
+    InputValidationError,
     SearchOptions,
 )
 from argupaper.workflows.models import SearchClarification
@@ -75,17 +77,17 @@ def analyze(
 
     try:
         if paper.startswith(("http://", "https://")):
-            raise ValueError(
+            raise InputValidationError(
                 "URL analysis is not part of the MVP CLI. Please use a local PDF path."
             )
         if rounds <= 0:
-            raise ValueError("--rounds must be greater than 0.")
+            raise InputValidationError("--rounds must be greater than 0.")
 
         paper_path = Path(paper)
         if not paper_path.exists():
-            raise FileNotFoundError(f"PDF file not found: {paper_path}")
+            raise InputValidationError(f"PDF file not found: {paper_path}")
         if paper_path.suffix.lower() != ".pdf":
-            raise ValueError("Input must be a .pdf file.")
+            raise InputValidationError("Input must be a .pdf file.")
 
         workflow = build_analyze_workflow()
         _run_analyze(
@@ -154,9 +156,9 @@ def search(
 
     try:
         if limit <= 0:
-            raise ValueError("--limit must be greater than 0.")
+            raise InputValidationError("--limit must be greater than 0.")
         if source not in {"semantic_scholar", "arxiv", "both"}:
-            raise ValueError("--source must be one of: semantic_scholar, arxiv, both.")
+            raise InputValidationError("--source must be one of: semantic_scholar, arxiv, both.")
 
         workflow = build_search_agent_workflow()
         limit_overridden = ctx.get_parameter_source("limit") == ParameterSource.COMMANDLINE
@@ -208,9 +210,11 @@ def _run_search(workflow: SearchAgentWorkflow, options: SearchOptions) -> None:
         and result.retrieved_count == 0
         and any("search failed" in warning.lower() for warning in result.warnings)
     ):
-        raise RuntimeError("All search sources failed.")
+        raise ExternalServiceError("All search sources failed.")
 
     console.print(format_success("Search complete"))
+    if not result.results:
+        format_warnings(["Search completed but returned no results. Try a broader query or another source."])
     if options.verbose:
         console.print(format_info(f"Parser: {result.parse_result.parser}"))
         console.print(
@@ -249,15 +253,15 @@ def papers(
 
     try:
         if paper_id and query:
-            raise ValueError("Use either a paper_id argument or --query, not both.")
+            raise InputValidationError("Use either a paper_id argument or --query, not both.")
         if limit <= 0:
-            raise ValueError("--limit must be greater than 0.")
+            raise InputValidationError("--limit must be greater than 0.")
 
         store = build_paper_store()
         if paper_id:
             record = asyncio.run(store.get_paper(paper_id))
             if record is None:
-                raise FileNotFoundError(f"Saved paper record not found: {paper_id}")
+                raise InputValidationError(f"Saved paper record not found: {paper_id}")
             format_paper_detail(record)
             if report:
                 saved_report = str(record.get("report", "")).strip()

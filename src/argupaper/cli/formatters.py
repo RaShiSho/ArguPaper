@@ -13,6 +13,15 @@ from argupaper.workflows.models import AnalyzeWorkflowResult, SearchAgentResult,
 
 console = Console(width=160)
 
+ERROR_HINTS = {
+    "ConfigurationError": "Check the required environment variables in .env.example and export them before retrying.",
+    "InputValidationError": "Check the command arguments and run the command again.",
+    "ExternalServiceError": "Check network access, API credentials, and the selected external source.",
+    "WorkflowExecutionError": "Review the visible warning or error above, then retry with --verbose if available.",
+    "FileNotFoundError": "Check that the path exists and is accessible from the current working directory.",
+    "ValueError": "Check the command arguments and configuration values.",
+}
+
 
 def format_search_results(
     result: SearchWorkflowResult | SearchAgentResult | list[dict[str, Any]]
@@ -64,7 +73,10 @@ def format_error(error: Exception) -> Panel:
 
     error_type = type(error).__name__
     error_msg = str(error)
-    content = f"[bold red]{error_type}[/bold red]: {error_msg}"
+    hint = ERROR_HINTS.get(error_type)
+    content = f"[bold red]{error_type}[/bold red]: {error_msg or 'No details available.'}"
+    if hint:
+        content += f"\n\n[bold]Next step[/bold]: {hint}"
 
     return Panel(
         content,

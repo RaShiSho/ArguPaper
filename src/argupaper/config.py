@@ -7,6 +7,8 @@ from typing import Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+from argupaper.workflows.errors import ConfigurationError
+
 # Load .env file
 load_dotenv()
 
@@ -112,7 +114,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
 
     pdf_api_key = os.getenv("MINERU_API_KEY", "")
     if require_pdf_api_key and not pdf_api_key:
-        raise ValueError(
+        raise ConfigurationError(
             "MINERU_API_KEY not set. Please set it in .env file or environment."
         )
 

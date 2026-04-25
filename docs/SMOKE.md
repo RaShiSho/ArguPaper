@@ -127,3 +127,21 @@ Remove-Item Env:DATA_PATH
 
 - 预期结果：第一次命令显示包含 `demo-paper-123` 与 `Demo Paper` 的 Saved Papers 表格；第二次命令显示 Saved Paper 摘要与 `Demo Report`
 - 记录：____
+
+### 6. CLI 错误处理
+
+- 功能名称：用户可读错误面板
+- 适用场景：验证 CLI 参数错误会显示明确错误类型与下一步提示
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+$tmp = Join-Path $env:TEMP "argupaper-not-pdf.txt"
+"not a pdf" | Set-Content -Encoding UTF8 $tmp
+uv run argupaper analyze $tmp
+if ($LASTEXITCODE -ne 1) { throw "Expected analyze to fail with exit code 1." }
+Remove-Item -Force $tmp
+```
+
+- 预期结果：命令以退出码 `1` 失败；错误面板包含 `InputValidationError`、`Input must be a .pdf file.` 与 `Next step`
+- 记录：____

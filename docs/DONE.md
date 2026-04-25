@@ -1,5 +1,23 @@
 # DONE
 
+## CLI 错误处理与空内容降级提示收口
+
+完成时间：2026-04-25
+
+本次将 CLI 输入错误、配置缺失和外部检索源全失败统一收敛到 workflow error 类型，并增强了用户可读错误面板。
+
+主要调整：
+
+- `load_config()` 在缺少 `MINERU_API_KEY` 时抛出 `ConfigurationError`，不再使用普通 `ValueError`。
+- `analyze`、`search`、`papers` 的参数错误统一抛出 `InputValidationError`。
+- 检索源全部失败时抛出 `ExternalServiceError`，错误面板会提示检查网络、API credentials 与检索源配置。
+- `format_error()` 增加 Next step 提示，避免只显示异常类型。
+- `AnalyzeWorkflow` 在 PDF 转换返回空 Markdown 时追加 warning，并跳过补充检索，避免静默使用空内容触发无意义外部搜索。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 CLI 错误处理表单执行手工验收。
+
 ## 本地论文历史记录读取入口完成
 
 完成时间：2026-04-25
