@@ -2,10 +2,11 @@
 
 面向论文检索与分析的 CLI 工具。
 
-当前提供两个主命令：
+当前提供三个主命令：
 
 - `argupaper search "<query>"`：检索论文
 - `argupaper analyze <local.pdf>`：分析本地 PDF
+- `argupaper papers`：查看本地已保存的论文分析记录
 
 ## 环境要求
 
@@ -108,6 +109,20 @@ uv run argupaper analyze ./paper.pdf --output report.md --rounds 2
 - 已配置 `MINERU_API_ENDPOINT`
 - 对未缓存 PDF，已配置 `NGROK_URL_BASE` 或其他可公开访问本地 PDF 的隧道地址
 
+查看本地历史记录：
+
+```bash
+uv run argupaper papers
+uv run argupaper papers --query "retrieval"
+uv run argupaper papers <paper_id_or_hash_prefix> --report
+```
+
+说明：
+
+- `papers` 默认读取 `DATA_PATH/papers` 下的本地记录。
+- `paper_id` 支持完整 ID 或唯一 hash 前缀。
+- `--report` 会渲染保存的 Markdown 报告；`--markdown` 会渲染缓存的论文 Markdown。
+
 查看版本：
 
 ```bash
@@ -118,6 +133,7 @@ uv run argupaper --version
 
 - `analyze` 当前只支持本地 PDF，不支持直接传 URL
 - 输出报告会写到 `--output` 指定路径；同时分析结果会落到 `data/` 目录下
+- 已保存记录可通过 `argupaper papers` 读取和搜索
 - 手工验收入口统一维护在 [docs/SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md)
 
 ## 已知限制

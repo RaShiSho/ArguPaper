@@ -127,6 +127,61 @@ def format_analyze_summary(result: AnalyzeWorkflowResult) -> None:
     console.print(Panel(summary, title="[bold]Analysis Summary[/bold]", expand=False))
 
 
+def format_paper_records(records: list[dict[str, Any]]) -> None:
+    """Display saved paper records as a table."""
+
+    if not records:
+        console.print("[dim]No saved paper records found.[/dim]")
+        return
+
+    table = Table(
+        title="Saved Papers",
+        show_header=True,
+        header_style="bold cyan",
+        show_lines=True,
+    )
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Paper ID", style="cyan")
+    table.add_column("Title", style="white")
+    table.add_column("Source", style="dim")
+    table.add_column("Updated", style="green")
+
+    for index, record in enumerate(records, start=1):
+        table.add_row(
+            str(index),
+            str(record.get("paper_id", "N/A")),
+            str(record.get("title", "Untitled")),
+            str(record.get("source", "N/A")),
+            str(record.get("updated_at", "N/A")),
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Found {len(records)} saved paper record(s)[/dim]")
+
+
+def format_paper_detail(record: dict[str, Any]) -> None:
+    """Display one saved paper record."""
+
+    metadata = record.get("metadata", {})
+    summary = Text()
+    summary.append(f"Paper ID: {metadata.get('paper_id', 'N/A')}\n", style="cyan")
+    summary.append(f"Title: {metadata.get('title', 'Untitled')}\n", style="white")
+    summary.append(f"Source: {metadata.get('source', 'N/A')}\n", style="dim")
+    summary.append(f"From cache: {'yes' if metadata.get('from_cache') else 'no'}\n", style="cyan")
+    summary.append(f"Updated: {metadata.get('updated_at', 'N/A')}", style="green")
+    console.print(Panel(summary, title="[bold]Saved Paper[/bold]", expand=False))
+
+    abstract = record.get("abstract", {})
+    if abstract:
+        abstract_text = Text()
+        for key in ("problem", "method", "experiment", "conclusion"):
+            value = str(abstract.get(key, "")).strip()
+            if value:
+                abstract_text.append(f"{key.title()}: ", style="bold cyan")
+                abstract_text.append(f"{value}\n")
+        console.print(Panel(abstract_text, title="[bold]Structured Summary[/bold]", expand=False))
+
+
 def render_markdown(markdown: str) -> Markdown:
     """Wrap markdown for Rich rendering."""
 

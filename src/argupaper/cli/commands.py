@@ -1,5 +1,6 @@
 """CLI commands for ArguPaper."""
 
+import asyncio
 import sys
 from pathlib import Path
 from typing import Optional
@@ -14,6 +15,8 @@ from argupaper.cli.formatters import (
     format_analyze_summary,
     format_error,
     format_info,
+    format_paper_detail,
+    format_paper_records,
     format_search_results,
     format_success,
     format_warnings,
@@ -21,6 +24,7 @@ from argupaper.cli.formatters import (
 )
 from argupaper.agents.search import SearchClarificationResponse
 from argupaper.config import load_config
+from argupaper.memory.paper_store import PaperStore
 from argupaper.workflows import (
     AnalyzeOptions,
     AnalyzeWorkflow,
@@ -51,6 +55,13 @@ def build_search_workflow() -> SearchAgentWorkflow:
     """Backward-compatible alias for the search-agent workflow builder."""
 
     return build_search_agent_workflow()
+
+
+def build_paper_store() -> PaperStore:
+    """Construct the default local paper store."""
+
+    config = load_config(require_pdf_api_key=False)
+    return PaperStore(storage_path=Path(config.data_path) / "papers")
 
 
 def analyze(
@@ -217,6 +228,60 @@ def _run_search(workflow: SearchAgentWorkflow, options: SearchOptions) -> None:
 
     format_search_results(result)
     console.print(f"[dim]Trace saved to: {Path(result.trace_dir).absolute()}[/dim]")
+
+
+def papers(
+    paper_id: Optional[str] = typer.Argument(
+        None,
+        help="Saved paper ID or unique hash prefix. Omit to list saved records.",
+    ),
+    query: Optional[str] = typer.Option(
+        None,
+        "--query",
+        "-q",
+        help="Search saved records by title, source, paper ID, or structured summary.",
+    ),
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum records to display"),
+    report: bool = typer.Option(False, "--report", help="Render the saved report for a paper"),
+    markdown: bool = typer.Option(False, "--markdown", help="Render the saved paper markdown"),
+) -> None:
+    """Inspect locally saved paper analysis records."""
+
+    try:
+        if paper_id and query:
+            raise ValueError("Use either a paper_id argument or --query, not both.")
+        if limit <= 0:
+            raise ValueError("--limit must be greater than 0.")
+
+        store = build_paper_store()
+        if paper_id:
+            record = asyncio.run(store.get_paper(paper_id))
+            if record is None:
+                raise FileNotFoundError(f"Saved paper record not found: {paper_id}")
+            format_paper_detail(record)
+            if report:
+                saved_report = str(record.get("report", "")).strip()
+                if saved_report:
+                    console.print(render_markdown(saved_report))
+                else:
+                    console.print("[dim]No saved report found for this paper.[/dim]")
+            if markdown:
+                saved_markdown = str(record.get("markdown", "")).strip()
+                if saved_markdown:
+                    console.print(render_markdown(saved_markdown))
+                else:
+                    console.print("[dim]No saved markdown found for this paper.[/dim]")
+            return
+
+        records = (
+            asyncio.run(store.search_papers(query))
+            if query
+            else asyncio.run(store.list_papers())
+        )
+        format_paper_records(records[:limit])
+    except Exception as exc:
+        console.print(format_error(exc))
+        raise typer.Exit(code=1)
 
 
 def _resolve_search_clarification(item: SearchClarification) -> SearchClarificationResponse:

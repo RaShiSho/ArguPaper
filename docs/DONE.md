@@ -1,5 +1,22 @@
 # DONE
 
+## 本地论文历史记录读取入口完成
+
+完成时间：2026-04-25
+
+本次补齐了面向本地 PaperStore 的 CLI 读取入口，用户可以通过 `argupaper papers` 查看 analyze 已保存的论文记录。
+
+主要调整：
+
+- 新增 `PaperStore.list_papers()`，按最近更新时间列出已保存记录。
+- 增强 `PaperStore.get_paper()`，支持使用完整 paper id 或唯一 hash 前缀读取记录，并限制输入不能越过存储目录。
+- 新增 `argupaper papers` 命令，支持列出记录、`--query` 本地搜索、按 paper id 查看结构化摘要，并可用 `--report` / `--markdown` 渲染保存内容。
+- README、任务清单与 smoke 表单已同步补充。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的本地论文历史记录读取表单执行手工验收。
+
 ## Claim-Evidence 对齐与证据充分性检查完成
 
 完成时间：2026-04-25

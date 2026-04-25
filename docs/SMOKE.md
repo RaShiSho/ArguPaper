@@ -100,3 +100,30 @@ asyncio.run(main())
 
 - 预期结果：第一行输出 `True True`；`unsupported_claims` 为空列表；`missing_analyses` 为空列表
 - 记录：____
+
+### 5. 本地论文历史记录读取
+
+- 功能名称：PaperStore 历史记录读取
+- 适用场景：验证 `argupaper papers` 可列出、搜索并按 paper id/hash 前缀读取本地记录
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+$env:DATA_PATH = Join-Path $env:TEMP "argupaper-paper-store-smoke"
+$paperDir = Join-Path $env:DATA_PATH "papers/demo-paper-123"
+New-Item -ItemType Directory -Force $paperDir | Out-Null
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Join-Path $paperDir "metadata.json"), '{"paper_id":"demo-paper-123","title":"Demo Paper","source":"smoke","from_cache":false}', $utf8)
+[System.IO.File]::WriteAllText((Join-Path $paperDir "abstract.json"), '{"problem":"Demo problem","method":"Demo method","experiment":"Demo experiment","conclusion":"Demo conclusion"}', $utf8)
+[System.IO.File]::WriteAllText((Join-Path $paperDir "report.md"), "# Demo Report", $utf8)
+[System.IO.File]::WriteAllText((Join-Path $paperDir "paper.md"), "# Demo Paper Markdown", $utf8)
+
+uv run argupaper papers --query Demo
+uv run argupaper papers demo-paper --report
+
+Remove-Item -Recurse -Force $env:DATA_PATH
+Remove-Item Env:DATA_PATH
+```
+
+- 预期结果：第一次命令显示包含 `demo-paper-123` 与 `Demo Paper` 的 Saved Papers 表格；第二次命令显示 Saved Paper 摘要与 `Demo Report`
+- 记录：____
