@@ -14,12 +14,8 @@ uv venv .venv && source .venv/bin/activate       # Linux/Mac
 # 安装依赖
 uv pip install -e .
 
-# 运行测试
-uv run pytest --basetemp=.pytest/tmp -o cache_dir=.pytest/cache
-
-# 代码检查
-uv run ruff check src/
-uv run mypy src/
+# 查看帮助
+uv run argupaper --help
 ```
 
 ## 项目结构
@@ -35,7 +31,6 @@ src/argupaper/
 ├── judge/         # 裁决层（共识检测）
 └── output/        # 输出报告生成
 docs/              # 文档
-tests/             # 测试相关代码
 ```
 
 ## 编码规范
@@ -58,13 +53,8 @@ tests/             # 测试相关代码
 - git提交记录需要符合规范，采用 `<type>(<scope>): <subject>` 的格式，其中 `<subject>` 用中文编写
 - 对于已经实现的功能，请编写简短的介绍文档，存放到 docs/DONE.md 中
 
+### Smoke 验收
 
-### 测试
-
-- 所有测试相关的缓存、临时目录、手工工作区统一放在 `.pytest/` 下
-- pytest 缓存目录固定使用 `.pytest/cache`
-- pytest 临时目录固定使用 `.pytest/tmp`
-- 手工创建的测试工作区固定使用 `.pytest/workspace`
-- 禁止在仓库根目录创建 `test_workspace`、`.test_workspace`、`.pytest_temp_run` 或其他散落的测试临时目录
-- 运行 pytest 时，默认使用 `uv run pytest --basetemp=.pytest/tmp -o cache_dir=.pytest/cache`
-- 编写测试时，优先使用 `tmp_path`；如果必须手动创建目录，必须显式放到 `.pytest/workspace` 下
+- 不再维护 pytest、ruff、mypy 等自动验证体系
+- 新增功能、主链路变更或行为修复时，必须同步更新 `docs/SMOKE.md`
+- 手工验收步骤统一记录在 `docs/SMOKE.md`，不要把 smoke 表单散落到其他文档

@@ -14,12 +14,8 @@ uv venv .venv && source .venv/bin/activate       # Linux/Mac
 # 安装依赖
 uv pip install -e .
 
-# 运行测试
-uv run pytest
-
-# 代码检查
-uv run ruff check src/
-uv run mypy src/
+# 查看帮助
+uv run argupaper --help
 ```
 
 ## 项目结构

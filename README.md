@@ -82,13 +82,13 @@ ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 查看帮助：
 
 ```bash
-argupaper --help
+uv run argupaper --help
 ```
 
 检索论文：
 
 ```bash
-argupaper search "retrieval augmented generation" --limit 10 --source both
+uv run argupaper search "retrieval augmented generation" --limit 10 --source both
 ```
 
 说明：
@@ -99,7 +99,7 @@ argupaper search "retrieval augmented generation" --limit 10 --source both
 分析本地 PDF：
 
 ```bash
-argupaper analyze ./paper.pdf --output report.md --rounds 2
+uv run argupaper analyze ./paper.pdf --output report.md --rounds 2
 ```
 
 运行前请确认：
@@ -111,13 +111,14 @@ argupaper analyze ./paper.pdf --output report.md --rounds 2
 查看版本：
 
 ```bash
-argupaper --version
+uv run argupaper --version
 ```
 
 ## 说明
 
 - `analyze` 当前只支持本地 PDF，不支持直接传 URL
 - 输出报告会写到 `--output` 指定路径；同时分析结果会落到 `data/` 目录下
+- 手工验收入口统一维护在 [docs/SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md)
 
 ## 已知限制
 

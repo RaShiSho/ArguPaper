@@ -17,7 +17,6 @@
 
 - CLI 基础入口已存在：[commands.py](/E:/Code/Project/ArguPaper/src/argupaper/cli/commands.py)
 - PDF 转 Markdown 主链路基本可用：[pipeline.py](/E:/Code/Project/ArguPaper/src/argupaper/pdf/pipeline.py)
-- PDF 缓存与本地服务已有测试覆盖：`tests/pdf/*`
 - 输出结构已定义：[structures.py](/E:/Code/Project/ArguPaper/src/argupaper/output/structures.py)
 - `argupaper analyze` 已通过 workflow 接入 2-Agent debate、共识检测和报告生成
 - 检索、抽取、分析、裁决、记忆库仍有部分能力处于 MVP 级或待增强状态
@@ -47,7 +46,7 @@ MVP 阶段只要求做到“单篇论文分析 + 基础检索 + 轻量对抗分�
 用户执行：
 
 ```bash
-argupaper analyze ./paper.pdf --output report.md --rounds 2
+uv run argupaper analyze ./paper.pdf --output report.md --rounds 2
 ```
 
 系统完成：
@@ -64,7 +63,7 @@ argupaper analyze ./paper.pdf --output report.md --rounds 2
 用户执行：
 
 ```bash
-argupaper search "retrieval augmented generation" --limit 10
+uv run argupaper search "retrieval augmented generation" --limit 10
 ```
 
 系统完成：
@@ -211,21 +210,16 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 - 单个外部服务失败时，系统应给出可解释错误，而不是静默失败。
 - 无法完成补充检索时，主分析流程应允许降级继续。
 
-### NFR-2 可测试性
-
-- 每个核心模块都需要可独立单测。
-- `analyze` 主流程至少需要一个集成测试桩链路。
-
-### NFR-3 可配置性
+### NFR-2 可配置性
 
 - API Key、模型名、缓存目录、最大轮数等必须由环境变量或 CLI 参数控制。
 
-### NFR-4 可维护性
+### NFR-3 可维护性
 
 - CLI 层保持薄，业务编排不能堆在命令函数中。
 - 外部 API 客户端、LLM 调用、存储层应保持清晰边界。
 
-### NFR-5 成本控制
+### NFR-4 成本控制
 
 - MVP 阶段优先采用“有限轮数 + 有限检索数 + 结构化 prompt”策略控制调用成本。
 
@@ -256,7 +250,7 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 
 原因：
 
-- 规则触发更容易测试与控制成本
+- 规则触发更容易控制成本
 - 多轮自适应检索应留到 P1 后再做
 
 ## 10. 当前差距分析
@@ -278,7 +272,7 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 - Judge / Confidence 质量与规则细化
 - Debate 异常兜底与报告呈现细化
 - PaperStore 落盘与读取增强
-- `analyze` 主链路集成测试覆盖
+- 更系统的手工 smoke 验收维护
 
 ## 11. MVP 验收标准
 
@@ -292,11 +286,11 @@ MVP 中该能力只做“单次、规则触发、有限结果数”的 Search-in
 6. `argupaper analyze --rounds N` 会把轮数传递到 debate workflow，并进入最终报告。
 7. Debate 结果必须进入报告中的 `Debate Summary` 区块。
 8. Debate 或补充检索失败时，CLI 必须给出可见 warning 或可解释降级结果。
-9. 关键模块具备基础测试覆盖，端到端主链路至少有一条集成测试。
+9. 功能变更后需补充并执行对应的手工 smoke 验收项。
 
 ## 12. 建议的交付顺序
 
 1. 打通 `search` 的真实结果链路。
 2. 打通 `analyze` 的“PDF -> 抽取 -> 分析 -> 报告”最短主链路。
 3. 增强已接入的 Evidence、2-Agent Debate 与报告输出质量。
-4. 最后补基础记忆库、Search-in-the-loop 与主链路测试。
+4. 最后补基础记忆库、Search-in-the-loop 与主链路 smoke 验收。

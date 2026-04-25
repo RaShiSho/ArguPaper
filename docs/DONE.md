@@ -1,5 +1,23 @@
 # DONE
 
+## 测试与静态检查体系移除
+
+完成时间：2026-04-25
+
+本次清理删除了项目中的 `pytest`、`ruff`、`mypy` 相关依赖、配置和说明，同时移除了整个 `tests/` 目录，并把项目验收方式统一收敛到 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md)。
+
+主要调整：
+
+- 删除 `tests/` 目录，不再维护自动化测试代码。
+- 从 `pyproject.toml` 中移除 `pytest`、`pytest-asyncio`、`ruff`、`mypy` 及相关工具配置。
+- 从 `AGENTS.md`、`CLAUDE.md`、`README.md`、`openspec/config.yaml` 和两个 active change 中删除自动验证要求。
+- 新增 `docs/SMOKE.md`，作为项目唯一的手工 smoke 验收入口。
+- 在 `AGENTS.md` 中新增规则：以后新增功能、主链路变更或行为修复，都必须同步更新 `docs/SMOKE.md`。
+
+当前验收方式：
+
+- 统一参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 执行手工 smoke 验收。
+
 ## Search / Judge / MinerU Correctness 修复
 
 完成时间：2026-04-23
@@ -10,17 +28,10 @@
 - 为 `MinerUClient` 增加可配置 endpoint，`AnalyzeWorkflow` 创建 pipeline 时会显式传入 `config.pdf.api_endpoint`。
 - 修复 `SearchWorkflow` 的跨源去重逻辑，按规范化标题和 URL 联合识别重复论文，避免同一篇论文在多源检索结果中重复展示。
 - 修复 `ConsensusDetector` 的 skeptic 回退逻辑，正向结论如 `The support case is mostly credible.` / `No major blocking gap remains.` 不再被误写入 `Disagreement`。
-- 新增回归测试，覆盖 MinerU 同步返回、自定义 endpoint、生效的跨源去重，以及正向 skeptic 结论不会污染最终报告。
 
-本次验证：
+当前验收方式：
 
-- `uv run --python .venv\Scripts\python.exe --no-project python -m pytest --basetemp=.pytest/cache/pytest-tmp-fix -o cache_dir=.pytest/cache tests/pdf/test_mineru_client.py::TestMinerUClient::test_submit_task_preserves_inline_markdown_response tests/pdf/test_mineru_client.py::TestMinerUClient::test_custom_endpoint_is_used_for_submit_and_status_requests tests/workflows/test_search_papers.py tests/judge/test_consensus.py tests/integration/test_analyze_workflow.py::test_analyze_workflow_build_pipeline_honors_configured_mineru_endpoint tests/integration/test_analyze_workflow.py::test_analyze_workflow_report_excludes_positive_skeptic_sentence_from_disagreement -q`
-- 结果：`6 passed`
-
-已知限制：
-
-- 当前 `.pytest/tmp` 目录存在历史 ACL 异常，按规范路径直接运行 pytest 会在创建临时目录时失败，因此本次验证临时改用 `.pytest/cache/pytest-tmp-fix` 作为 `basetemp`。
-- 当前环境中 `uv run --python .venv\Scripts\python.exe --no-project ruff check src/ tests/` 与 `uv run --python .venv\Scripts\python.exe --no-project mypy src/` 均失败，原因是 `.venv` 中不存在 `ruff` / `mypy` 可执行文件。
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的检索与 analyze 表单进行手工验收。
 
 ## 2-Agent Debate 完成
 
@@ -35,7 +46,6 @@
 - 支持在证据充分时第 2 轮提前收敛
 - 支持在 baseline / ablation / metrics 缺失时继续跑满配置轮数
 - 为 `AgentMessage` 与 `DebateState` 修复可变默认值问题，避免状态串联
-- 新增 `tests/chains/test_debate.py`，覆盖提前收敛、跑满轮数和状态隔离
 
 当前边界：
 
@@ -47,11 +57,6 @@
 - 提升 `ConsensusDetector` 的结论提取质量
 - 细化 confidence 的规则计算
 - 增强 report 中对 debate 结果的结构化展示
-
-已验证：
-
-- `pytest tests/chains/test_debate.py`
-- 结果：`3 passed`
 
 ## CLI MVP 升级
 
@@ -86,18 +91,6 @@
   - warning / success / error / info 面板
   - markdown 报告渲染
 
-## 测试
-
-新增：
-
-- `tests/cli/test_commands.py`
-- `tests/conftest.py`
-
-已验证：
-
-- `.\.venv\Scripts\python.exe -m pytest tests/cli/test_commands.py tests/pdf/test_pipeline.py`
-- 结果：`15 passed`
-
 ## 当前状态
 
 CLI 已具备 MVP 可用性：
@@ -122,34 +115,19 @@ CLI 已具备 MVP 可用性：
 - 新增通用 OpenAI 兼容 LLM provider 配置，为后续其他 Agent 复用做准备
 - 新增 Prompt 独立目录，避免把 Agent Prompt 硬编码在 Python 中
 
-已验证：
-
-- `uv run pytest -q`
-- 结果：`44 passed`
-
 ## Analyze 主链路稳定性增强
 
 完成时间：2026-04-22
 
-本次围绕 `argupaper analyze` 主链路做了稳定性收口，重点不是扩展更多 Agent，而是让当前链路更可解释、更可降级、更可验证，主要包括：
+本次围绕 `argupaper analyze` 主链路做了稳定性收口，重点不是扩展更多 Agent，而是让当前链路更可解释、更可降级，主要包括：
 
 - 强化 `AnalyzeWorkflow` 的主链路契约，统一 judge/report 使用的中间结果结构
 - 为 supplementary retrieval、debate、judge、report 增加显式 warning 汇总与局部失败降级
 - 重写 `ConsensusDetector`，让共识、分歧、supporting evidence、confidence、conflict intensity 基于 debate/evidence/supplementary retrieval 信号生成
 - 重构 `ReportGenerator`，让 `Method Comparison`、`Debate Summary`、`Consensus vs Disagreement`、`Warnings` 结构化输出
-- 新增 `tests/integration/test_analyze_workflow.py`，覆盖 happy path、降级路径与 `rounds` 参数传递
 
 当前收益：
 
 - `argupaper analyze` 在局部失败时不再轻易整体中断
 - 报告中的 debate 与 judge 信息更清晰，warning 能直接暴露给用户
-- analyze 主链路具备基础集成测试，便于后续继续增强 Judge、Report 和 Debate
-
-本次验证：
-
-- `uv run pytest tests/integration/test_analyze_workflow.py tests/chains/test_debate.py -q`
-- 结果：`6 passed`
-
-已知限制：
-
-- 当前环境中 `uv run ruff` 与 `uv run mypy` 命令不可用，因此未完成静态检查验证
+- analyze 主链路具备更清晰的手工 smoke 验收入口，便于后续继续增强 Judge、Report 和 Debate

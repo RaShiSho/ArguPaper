@@ -33,15 +33,6 @@ env/
 *~
 *.code-workspace
 
-# Testing
-.pytest/
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.mypy_cache/
-.ruff_cache/
-
 # Data files (local storage)
 data/
 *.pdf
