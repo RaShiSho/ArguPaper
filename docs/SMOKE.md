@@ -168,3 +168,40 @@ Remove-Item Env:ANALYZE_ENABLE_RETRIEVAL_LOOP
 
 - 预期结果：输出的 paper storage 路径与 `$env:PAPER_STORAGE_PATH` 一致；第二行输出 `7 13`；第三行输出 `False`
 - 记录：____
+
+### 8. Debate 角色异常兜底
+
+- 功能名称：Debate 单角色异常兜底
+- 适用场景：验证 support 输出为空、skeptic 抛异常时，`DebateChain` 仍返回结构完整的 `DebateState`
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+from argupaper.agents.base import AgentBase, AgentConfig
+from argupaper.chains.debate import DebateChain
+
+class EmptySupport(AgentBase):
+    async def think(self, context):
+        return ""
+
+class BrokenSkeptic(AgentBase):
+    async def think(self, context):
+        raise RuntimeError("boom")
+
+async def main():
+    chain = DebateChain(max_rounds=1)
+    chain.support_agent = EmptySupport(AgentConfig(name="support", role="support"))
+    chain.skeptic_agent = BrokenSkeptic(AgentConfig(name="skeptic", role="skeptic"))
+    state = await chain.run({"analysis": {"overview": "demo"}, "evidence": {}})
+    print(len(state.messages))
+    print(state.messages[0].content)
+    print(state.messages[1].content)
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：第一行输出 `2`；后两行分别包含 `Support fallback` 与 `Skeptic fallback`
+- 记录：____

@@ -1,5 +1,22 @@
 # DONE
 
+## Debate 单角色异常兜底完成
+
+完成时间：2026-04-25
+
+本次增强了 `DebateChain` 的角色级稳定性，单个 agent 输出为空或抛出异常时，会生成可进入报告的 fallback message，而不是让整段 debate 直接失败。
+
+主要调整：
+
+- 新增 `_safe_agent_think()`，对 support / skeptic 每次输出做空值与异常兜底。
+- 新增角色级 fallback 文案，明确说明是 support 或 skeptic 输出不可用，并保留失败原因摘要。
+- `DebateState.messages` 仍会包含本轮 support 与 skeptic 消息，保证 report 的 `Debate Summary` 结构完整。
+- `docs/TASKS.md` 与 `docs/SMOKE.md` 已同步补充本次变更。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 Debate 角色异常兜底表单执行手工验收。
+
 ## 配置项与环境变量模板同步完成
 
 完成时间：2026-04-25

@@ -63,7 +63,7 @@
   验收：更清晰地呈现 debate/judge 结果，并保持符合 `ResearchReport` 的 Markdown 报告输出。
 - `[DONE] P0` T306 替换 [commands.py](/E:/Code/Project/ArguPaper/src/argupaper/cli/commands.py) 中 `analyze` 的占位报告逻辑。
   验收：`argupaper analyze` 输出真实结构化报告。
-- `[TODO] P1` T307 为 Debate 和 Judge 增加结构校验与兜底默认值。
+- `[DONE] P1` T307 为 Debate 和 Judge 增加结构校验与兜底默认值。
   验收：单角色输出异常时，不会导致整个报告崩溃。
 
 ## Milestone 4：基础记忆库与 Search-in-the-loop

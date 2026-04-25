@@ -1,6 +1,6 @@
 """Debate chain for multi-round adversarial discussion."""
 
-from argupaper.agents.base import AgentConfig
+from argupaper.agents.base import AgentBase, AgentConfig
 from argupaper.agents.message import AgentMessage, DebateState
 from argupaper.agents.skeptic import SkepticAgent
 from argupaper.agents.support import SupportAgent
@@ -25,14 +25,16 @@ class DebateChain:
         evidence_refs = self._collect_evidence_refs(initial_context)
 
         for round_number in range(1, self.max_rounds + 1):
-            support_content = await self.support_agent.think(
+            support_content = await self._safe_agent_think(
+                self.support_agent,
+                "support",
                 {
                     **initial_context,
                     "round": round_number,
                     "latest_skeptic_message": (
                         state.skeptic_positions[-1] if state.skeptic_positions else ""
                     ),
-                }
+                },
             )
             self.support_agent.add_message("assistant", support_content)
 
@@ -46,12 +48,14 @@ class DebateChain:
             state.messages.append(support_message)
             state.support_positions.append(support_content)
 
-            skeptic_content = await self.skeptic_agent.think(
+            skeptic_content = await self._safe_agent_think(
+                self.skeptic_agent,
+                "skeptic",
                 {
                     **initial_context,
                     "round": round_number,
                     "latest_support_message": support_content,
-                }
+                },
             )
             self.skeptic_agent.add_message("assistant", skeptic_content)
 
@@ -71,6 +75,30 @@ class DebateChain:
                 break
 
         return state
+
+    async def _safe_agent_think(self, agent: AgentBase, role: str, context: dict) -> str:
+        """Run one debate role and convert bad output into a reportable fallback."""
+
+        try:
+            content = (await agent.think(context)).strip()
+        except Exception as exc:
+            return self._fallback_agent_content(role, f"{type(exc).__name__}: {exc}")
+        if content:
+            return content
+        return self._fallback_agent_content(role, "empty response")
+
+    def _fallback_agent_content(self, role: str, reason: str) -> str:
+        if role == "support":
+            return (
+                "Support fallback: this role produced no usable argument, so the positive case "
+                f"must rely only on extracted analysis and evidence signals ({reason})."
+            )
+        if role == "skeptic":
+            return (
+                "Skeptic fallback: this role produced no usable critique, so unresolved evidence "
+                f"risk should still be reviewed manually ({reason})."
+            )
+        return f"{role.title()} fallback: no usable debate output was produced ({reason})."
 
     async def should_stop_early(self, state: DebateState, initial_context: dict) -> bool:
         """Check if debate should stop before max rounds."""
