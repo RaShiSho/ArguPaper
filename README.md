@@ -104,7 +104,13 @@ uv run argupaper search "retrieval augmented generation" --limit 10 --source bot
 分析本地 PDF：
 
 ```bash
-uv run argupaper analyze ./paper.pdf --output report.md --rounds 2
+uv run argupaper analyze ./paper.pdf --output 1.md --rounds 2
+```
+
+自动按论文文件名保存报告：
+
+```bash
+uv run argupaper analyze ./paper.pdf --save-report
 ```
 
 运行前请确认：
@@ -136,7 +142,9 @@ uv run argupaper --version
 ## 说明
 
 - `analyze` 当前只支持本地 PDF，不支持直接传 URL
-- 输出报告会写到 `--output` 指定路径；同时分析结果会落到 `data/` 目录下
+- `--output 1.md` 这类裸文件名会自动保存到 `output/1.md`；显式目录或绝对路径会按用户传入路径保存
+- `--save-report` 会在未指定 `--output` 时自动保存到 `output/<论文文件名>.md`
+- 分析结果会同时落到 `data/` 目录下
 - 已保存记录可通过 `argupaper papers` 读取和搜索
 - 手工验收入口统一维护在 [docs/SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md)
 

@@ -1,5 +1,17 @@
 # DONE
 
+## Analyze 输出路径收口
+
+完成时间：2026-04-26
+
+本次调整了 `argupaper analyze --output` 的输出路径规则：
+
+- 当 `--output` 传入裸文件名，例如 `1.md`，报告会自动保存到 `output/1.md`。
+- 当 `--output` 传入显式目录或绝对路径时，继续按用户指定路径保存。
+- 新增 `--save-report` 参数；未指定 `--output` 时，会自动保存到 `output/<论文文件名>.md`。
+- 写出报告前会自动创建父目录。
+- README 与 `docs/SMOKE.md` 已同步新行为。
+
 ## MinerU 本地文件上传链路接入
 
 完成时间：2026-04-26

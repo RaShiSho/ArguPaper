@@ -38,6 +38,7 @@ from argupaper.workflows.search_agent import SearchAgentWorkflow
 
 console = Console()
 SPINNER_NAME = "line"
+DEFAULT_OUTPUT_DIR = Path("output")
 
 
 def build_analyze_workflow() -> AnalyzeWorkflow:
@@ -60,6 +61,29 @@ def build_search_workflow() -> SearchAgentWorkflow:
     return build_search_agent_workflow()
 
 
+def resolve_analyze_output_path(output: str | None) -> Path | None:
+    """Resolve analyze output paths.
+
+    A bare filename such as "1.md" is saved under output/ by default. Explicit
+    paths like "reports/1.md", ".\\1.md", or absolute paths keep their meaning.
+    """
+
+    if output is None:
+        return None
+
+    output_path = Path(output)
+    has_explicit_path = any(separator in output for separator in ("/", "\\"))
+    if output_path.is_absolute() or has_explicit_path:
+        return output_path
+    return DEFAULT_OUTPUT_DIR / output_path
+
+
+def resolve_auto_report_path(paper_path: Path) -> Path:
+    """Build the default report path from the input paper filename."""
+
+    return DEFAULT_OUTPUT_DIR / f"{paper_path.stem}.md"
+
+
 def build_paper_store() -> PaperStore:
     """Construct the default local paper store."""
 
@@ -70,6 +94,11 @@ def build_paper_store() -> PaperStore:
 def analyze(
     paper: str = typer.Argument(..., help="Path to PDF file or URL"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+    save_report: bool = typer.Option(
+        False,
+        "--save-report",
+        help="Save report markdown to output/<paper-filename>.md when --output is not set",
+    ),
     rounds: int = typer.Option(3, "--rounds", "-r", help="Number of debate rounds"),
     force: bool = typer.Option(False, "--force", "-f", help="Force reconvert even if cached"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
@@ -91,11 +120,15 @@ def analyze(
             raise InputValidationError("Input must be a .pdf file.")
 
         workflow = build_analyze_workflow()
+        output_path = resolve_analyze_output_path(output)
+        if output_path is None and save_report:
+            output_path = resolve_auto_report_path(paper_path)
+
         _run_analyze(
             workflow=workflow,
             options=AnalyzeOptions(
                 paper_path=paper_path,
-                output_path=Path(output) if output else None,
+                output_path=output_path,
                 rounds=rounds,
                 force_reconvert=force,
                 verbose=verbose,
@@ -135,6 +168,7 @@ def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
         console.print(format_info(f"Report title: {result.report_title}"))
 
     if options.output_path:
+        options.output_path.parent.mkdir(parents=True, exist_ok=True)
         options.output_path.write_text(result.report_markdown, encoding="utf-8")
         console.print(f"[dim]Report saved to: {options.output_path.absolute()}[/dim]")
 

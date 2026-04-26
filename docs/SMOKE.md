@@ -56,11 +56,20 @@
 - 功能名称：本地 PDF 分析
 - 适用场景：验证 `analyze` 主链路可生成报告
 - 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；当前网络可访问 MinerU API 与其返回的签名上传 / 下载地址；准备一个本地 PDF 文件
-- 执行命令：`uv run argupaper analyze ./paper.pdf --output report.md --rounds 2`
-- 预期结果：成功生成 Markdown 报告；报告中应能看到与当前轮数一致的 debate 输出；若外部服务异常，应给出可见错误或 warning，而不是静默失败；`Disagreement` 不应出现明显正向结论
+- 执行命令：`uv run argupaper analyze ./paper.pdf --output 1.md --rounds 2`
+- 预期结果：成功生成 Markdown 报告，裸文件名输出自动保存到 `output/1.md`；报告中应能看到与当前轮数一致的 debate 输出；若外部服务异常，应给出可见错误或 warning，而不是静默失败；`Disagreement` 不应出现明显正向结论
 - 记录：____
 
-### 4.1 Claim-Evidence 对齐
+### 4.1 Analyze 自动报告保存
+
+- 功能名称：Analyze 自动报告保存
+- 适用场景：验证未显式传入 `--output` 时，可按论文文件名自动保存报告
+- 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；准备一个本地 PDF 文件
+- 执行命令：`uv run argupaper analyze ./paper.pdf --save-report`
+- 预期结果：成功生成 Markdown 报告，并自动保存到 `output/paper.md`
+- 记录：____
+
+### 4.2 Claim-Evidence 对齐
 
 - 功能名称：Claim-Evidence 对齐与证据充分性检查
 - 适用场景：验证 evidence 链路可识别 claim 支撑、baseline、ablation 与缺失项
