@@ -6,7 +6,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-SearchSource = Literal["semantic_scholar", "arxiv", "both"]
+SearchSource = Literal["semantic_scholar", "arxiv", "google_scholar", "serpapi", "both"]
 
 
 class SearchResult(BaseModel):

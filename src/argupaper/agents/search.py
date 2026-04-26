@@ -166,6 +166,8 @@ class SearchRequestParser:
 
         if "semantic scholar" in lowered:
             filters.source_preference = "semantic_scholar"
+        elif any(token in lowered for token in ("google scholar", "google_scholar", "serpapi", "谷歌学术")):
+            filters.source_preference = "google_scholar"
         elif "arxiv" in lowered:
             filters.source_preference = "arxiv"
 
@@ -246,9 +248,20 @@ class SearchRequestParser:
     def _extract_keywords(self, raw_request: str) -> list[str]:
         cleaned = raw_request
         patterns = [
+            r"给我",
+            r"有关",
+            r"关于",
+            r"要求",
+            r"近一年",
+            r"最近一年",
+            r"过去一年",
             r"近\s*\d+\s*年",
             r"近两年",
             r"近三年",
+            r"最近两年",
+            r"最近三年",
+            r"过去两年",
+            r"过去三年",
             r"\d+\s*(?:篇|papers?|results?)",
             r"权威期刊",
             r"高质量论文",
@@ -257,6 +270,7 @@ class SearchRequestParser:
             r"期刊论文",
             r"期刊",
             r"论文",
+            r"的",
         ]
         for pattern in patterns:
             cleaned = re.sub(pattern, " ", cleaned, flags=re.I)

@@ -37,6 +37,7 @@ from argupaper.workflows.search_agent import SearchAgentWorkflow
 
 
 console = Console()
+SPINNER_NAME = "line"
 
 
 def build_analyze_workflow() -> AnalyzeWorkflow:
@@ -109,7 +110,7 @@ def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
     """Run the analysis workflow synchronously."""
 
     with Progress(
-        SpinnerColumn(),
+        SpinnerColumn(SPINNER_NAME),
         TextColumn("[progress.description]{task.description}"),
         TaskProgressColumn(),
         console=console,
@@ -148,7 +149,7 @@ def search(
         "both",
         "--source",
         "-s",
-        help="Search source: semantic_scholar, arxiv, or both",
+        help="Search source: semantic_scholar, arxiv, google_scholar, serpapi, or both",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
@@ -157,8 +158,10 @@ def search(
     try:
         if limit <= 0:
             raise InputValidationError("--limit must be greater than 0.")
-        if source not in {"semantic_scholar", "arxiv", "both"}:
-            raise InputValidationError("--source must be one of: semantic_scholar, arxiv, both.")
+        if source not in {"semantic_scholar", "arxiv", "google_scholar", "serpapi", "both"}:
+            raise InputValidationError(
+                "--source must be one of: semantic_scholar, arxiv, google_scholar, serpapi, both."
+            )
 
         workflow = build_search_agent_workflow()
         limit_overridden = ctx.get_parameter_source("limit") == ParameterSource.COMMANDLINE
@@ -186,7 +189,7 @@ def _run_search(workflow: SearchAgentWorkflow, options: SearchOptions) -> None:
     """Run paper search."""
 
     with Progress(
-        SpinnerColumn(),
+        SpinnerColumn(SPINNER_NAME),
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:

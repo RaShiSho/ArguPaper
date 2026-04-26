@@ -2,12 +2,6 @@
 
 本文件是项目唯一的手工 smoke 验收入口。
 
-规则：
-
-- 新增功能、主链路变更或行为修复时，必须同步更新本文件
-- smoke 表单统一写在这里，不要散落到 `AGENTS.md`、`README.md` 或其他文档
-- 所有 Python 相关命令默认通过 `uv run` 执行
-
 ## 表单模板
 
 每条 smoke 项按以下字段维护：
@@ -257,4 +251,19 @@ asyncio.run(main())
 ```
 
 - 预期结果：输出 `empty-smoke`；warning 中包含 `PDF conversion returned empty Markdown`、`Structured extraction missing fields` 和 `Supplementary retrieval skipped`
+- 记录：____
+
+### 10. SerpApi Google Scholar 检索
+
+- 功能名称：SerpApi Google Scholar 检索源
+- 适用场景：验证配置 `SERPAPI_API_KEY` 后可通过 Google Scholar 获取论文候选，并可作为 Semantic Scholar 403/429 的回退
+- 前置条件：网络可访问；已配置有效的 `SERPAPI_API_KEY`
+- 执行命令：
+
+```powershell
+uv run argupaper search "给我10篇有关多智能体的论文，要求近一年的" --source google_scholar --verbose
+uv run argupaper search "给我10篇有关多智能体的论文，要求近一年的" --source semantic_scholar --verbose
+```
+
+- 预期结果：第一条命令返回 `source=google_scholar` 的论文列表；第二条命令若 Semantic Scholar 返回 403/429，应出现 `Fell back to Google Scholar via SerpApi` warning 且仍返回论文结果
 - 记录：____

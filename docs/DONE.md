@@ -1,5 +1,24 @@
 # DONE
 
+## SerpApi Google Scholar 检索源接入
+
+完成时间：2026-04-26
+
+本次补齐了 SerpApi 平台的 Google Scholar 查询能力，解决只配置 SerpApi key 但 `argupaper search` 仍只调用 Semantic Scholar 的问题。
+
+主要调整：
+
+- 新增 `GoogleScholarClient`，通过 SerpApi `google_scholar` engine 返回标准 `SearchResult` 字段。
+- 新增 `SERPAPI_API_KEY` / `SERP_API_KEY` 配置读取，并同步 `.env.example` 与 README。
+- `--source` 支持 `google_scholar` 与 `serpapi`，`both` 在配置 SerpApi key 后会自动聚合 Google Scholar。
+- 当 `--source semantic_scholar` 遇到 Semantic Scholar 403/429 且已配置 SerpApi key 时，会自动回退到 Google Scholar 并输出 warning。
+- 搜索 Agent 的 source schema 与启发式解析已支持 “Google Scholar / SerpApi / 谷歌学术”。
+- 中文启发式关键词清理补充了“给我 / 有关 / 要求 / 近一年”等表达，减少自然语言请求中的噪声词进入检索 query。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 SerpApi Google Scholar 检索表单执行手工验收。
+
 ## Analyze 空内容与抽取缺失降级提示完成
 
 完成时间：2026-04-25

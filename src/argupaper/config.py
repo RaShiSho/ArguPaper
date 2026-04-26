@@ -26,6 +26,7 @@ class RetrievalConfig(BaseModel):
     """Retrieval module configuration."""
 
     semantic_scholar_api_key: Optional[str] = None
+    serpapi_api_key: Optional[str] = None
     default_limit: int = 10
     max_results: int = 20
 
@@ -139,6 +140,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
         ),
         retrieval=RetrievalConfig(
             semantic_scholar_api_key=os.getenv("SEMANTIC_SCHOLAR_API_KEY"),
+            serpapi_api_key=os.getenv("SERPAPI_API_KEY") or os.getenv("SERP_API_KEY"),
             default_limit=int(os.getenv("SEARCH_DEFAULT_LIMIT", "10")),
             max_results=int(os.getenv("SEARCH_MAX_RESULTS", "20")),
         ),

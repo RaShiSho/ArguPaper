@@ -66,6 +66,9 @@ PAPER_STORAGE_PATH=./data/papers
 ```env
 # 配置后可提升 Semantic Scholar 检索能力
 SEMANTIC_SCHOLAR_API_KEY=your_api_key_here
+
+# 配置后可使用 SerpApi 的 Google Scholar 检索
+SERPAPI_API_KEY=your_serpapi_key_here
 ```
 
 ### 常用可选项
@@ -96,6 +99,8 @@ uv run argupaper search "retrieval augmented generation" --limit 10 --source bot
 说明：
 
 - `--source both` 当前会聚合多个来源的结果并排序返回。
+- `--source google_scholar` 或 `--source serpapi` 会通过 SerpApi 调用 Google Scholar。
+- 配置 `SERPAPI_API_KEY` 后，`--source both` 会自动加入 Google Scholar；当 `--source semantic_scholar` 遇到 403/429 且已配置 SerpApi 时，会回退到 Google Scholar。
 - 但当前去重逻辑仍存在已知限制：在同标题但实际不是同一篇论文的场景下，可能发生误合并。
 
 分析本地 PDF：

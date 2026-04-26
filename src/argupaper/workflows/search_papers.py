@@ -6,7 +6,12 @@ from datetime import datetime
 from typing import Callable, Optional
 
 from argupaper.config import Config
-from argupaper.retrieval import ArXivClient, QueryExpander, SemanticScholarClient
+from argupaper.retrieval import (
+    ArXivClient,
+    GoogleScholarClient,
+    QueryExpander,
+    SemanticScholarClient,
+)
 from argupaper.workflows.models import SearchOptions, SearchResult, SearchWorkflowResult
 
 ProgressCallback = Optional[Callable[[str], None]]
@@ -21,6 +26,7 @@ class SearchWorkflow:
         expander: Optional[QueryExpander] = None,
         semantic_client: Optional[SemanticScholarClient] = None,
         arxiv_client: Optional[ArXivClient] = None,
+        google_scholar_client: Optional[GoogleScholarClient] = None,
     ):
         self.config = config
         self.expander = expander or QueryExpander()
@@ -28,6 +34,9 @@ class SearchWorkflow:
             api_key=config.retrieval.semantic_scholar_api_key
         )
         self.arxiv_client = arxiv_client or ArXivClient()
+        self.google_scholar_client = google_scholar_client or GoogleScholarClient(
+            api_key=config.retrieval.serpapi_api_key
+        )
 
     async def run(
         self,
@@ -50,7 +59,8 @@ class SearchWorkflow:
         queries_to_run = expanded_queries[:3]
         per_query_limit = min(max(options.limit, 1), self.config.retrieval.max_results)
 
-        for source_name in self._resolve_sources(options.source):
+        resolved_sources = self._resolve_sources(options.source)
+        for source_name in resolved_sources:
             for query in queries_to_run:
                 try:
                     source_results = await self._search_source(source_name, query, per_query_limit)
@@ -59,6 +69,25 @@ class SearchWorkflow:
                     source_stats[source_name] += len(normalized)
                 except Exception as exc:
                     warnings.append(f"{source_name} search failed: {exc}")
+                    if (
+                        source_name == "semantic_scholar"
+                        and "google_scholar" not in resolved_sources
+                        and self._can_fallback_to_google_scholar(exc)
+                    ):
+                        try:
+                            source_results = await self._search_source(
+                                "google_scholar",
+                                query,
+                                per_query_limit,
+                            )
+                            normalized = [SearchResult.model_validate(item) for item in source_results]
+                            raw_results.extend(normalized)
+                            source_stats["google_scholar"] += len(normalized)
+                            warnings.append(
+                                "Fell back to Google Scholar via SerpApi after Semantic Scholar failed."
+                            )
+                        except Exception as fallback_exc:
+                            warnings.append(f"google_scholar fallback failed: {fallback_exc}")
 
         if progress_callback:
             progress_callback("Merging and ranking results...")
@@ -83,8 +112,13 @@ class SearchWorkflow:
         return asyncio.run(self.run(options, progress_callback))
 
     def _resolve_sources(self, source: str) -> list[str]:
+        if source == "serpapi":
+            return ["google_scholar"]
         if source == "both":
-            return ["semantic_scholar", "arxiv"]
+            sources = ["semantic_scholar", "arxiv"]
+            if self.config.retrieval.serpapi_api_key:
+                sources.append("google_scholar")
+            return sources
         return [source]
 
     async def _search_source(self, source_name: str, query: str, limit: int) -> list[dict]:
@@ -92,7 +126,15 @@ class SearchWorkflow:
             return await self.semantic_client.search(query, limit=limit)
         if source_name == "arxiv":
             return await self.arxiv_client.search(query, limit=limit)
+        if source_name == "google_scholar":
+            return await self.google_scholar_client.search(query, limit=limit)
         return []
+
+    def _can_fallback_to_google_scholar(self, exc: Exception) -> bool:
+        if not self.config.retrieval.serpapi_api_key:
+            return False
+        message = str(exc)
+        return "403" in message or "429" in message or "rate" in message.casefold()
 
     def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
         deduped: dict[str, SearchResult] = {}
@@ -151,7 +193,7 @@ class SearchWorkflow:
             exact_match_weight = len(query_tokens & title_tokens) * 10
             citation_weight = min(result.citation_count, 500) / 10
             recency_weight = max(0, 5 - max(0, current_year - (result.year or current_year)))
-            source_weight = 2 if result.source == "semantic_scholar" else 1
+            source_weight = 2 if result.source in {"semantic_scholar", "google_scholar"} else 1
             return exact_match_weight + citation_weight + recency_weight + source_weight
 
         return sorted(results, key=score, reverse=True)
