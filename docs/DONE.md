@@ -1,5 +1,18 @@
 # DONE
 
+## MinerU 本地文件上传链路接入
+
+完成时间：2026-04-26
+
+本次针对未缓存 PDF 分析时 MinerU 读取 ngrok URL 失败的问题做了客户端侧改进：
+
+- `MinerUClient` 的 `aiohttp.ClientSession` 启用 `trust_env=True`，兼容环境级网络配置。
+- MinerU 网络错误会输出当前请求 endpoint，并提示检查 `MINERU_API_ENDPOINT`、网络或防火墙设置。
+- 默认官方 endpoint `https://mineru.net/api/v4/extract/task` 会走 MinerU 官方本地文件签名上传链路：申请上传 URL、PUT 上传 PDF、轮询 batch 结果。
+- 上传签名 URL 时按官方示例避免设置 `Content-Type` 请求头，降低对象存储签名校验返回 403 的风险。
+- 下载解析结果 ZIP / Markdown 时使用独立无认证头 session，避免 MinerU API header 泄漏到 CDN 请求。
+- `docs/SMOKE.md`、`.env.example` 与 README 已同步官方 endpoint 和本地上传前置条件。
+
 ## SerpApi Google Scholar 检索源接入
 
 完成时间：2026-04-26

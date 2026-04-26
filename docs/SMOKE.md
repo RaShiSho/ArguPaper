@@ -55,7 +55,7 @@
 
 - 功能名称：本地 PDF 分析
 - 适用场景：验证 `analyze` 主链路可生成报告
-- 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT`；若分析未缓存 PDF，还需配置 `NGROK_URL_BASE` 或其他可公开访问本地 PDF 的地址；准备一个本地 PDF 文件
+- 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；当前网络可访问 MinerU API 与其返回的签名上传 / 下载地址；准备一个本地 PDF 文件
 - 执行命令：`uv run argupaper analyze ./paper.pdf --output report.md --rounds 2`
 - 预期结果：成功生成 Markdown 报告；报告中应能看到与当前轮数一致的 debate 输出；若外部服务异常，应给出可见错误或 warning，而不是静默失败；`Disagreement` 不应出现明显正向结论
 - 记录：____

@@ -136,25 +136,18 @@ class PDFPipeline:
         """
         delay = self.initial_retry_delay
         last_error: Exception | None = None
+        attempts_used = 0
 
         for attempt in range(self.max_retries):
+            attempts_used = attempt + 1
             try:
-                # Register PDF with local server
-                self.local_server.register_pdf(cache_key, pdf_path)
-
-                # Start server and get URL
-                async with self.local_server:
-                    if self.public_url_base:
-                        # Use public URL base (ngrok/tunnel)
-                        pdf_url = f"{self.public_url_base}/pdf/{cache_key}"
-                    else:
-                        # Use local server URL
-                        pdf_url = self.local_server.get_url_for_pdf(cache_key)
-
-                    # Submit and wait for conversion
-                    result = await self.mineru.wait_for_completion(
-                        await self.mineru.submit_task(pdf_url)
+                if self.mineru.supports_local_file_upload:
+                    result = await self.mineru.convert_local_file(
+                        pdf_path,
+                        data_id=cache_key,
                     )
+                else:
+                    result = await self._convert_from_served_url(pdf_path, cache_key)
 
                 # Update result with cache key and store in cache
                 result.cache_key = cache_key
@@ -185,11 +178,26 @@ class PDFPipeline:
             if isinstance(last_error, RateLimitError):
                 raise last_error
             raise ConversionError(
-                f"Conversion failed after {self.max_retries} attempts: {last_error}"
+                f"Conversion failed after {attempts_used} attempt(s): {last_error}"
             )
 
         # Should not reach here
         raise ConversionError("Unexpected error in conversion")
+
+    async def _convert_from_served_url(self, pdf_path: Path, cache_key: str) -> ConversionResult:
+        """Convert a PDF through MinerU's remote URL parsing API."""
+
+        self.local_server.register_pdf(cache_key, pdf_path)
+
+        async with self.local_server:
+            if self.public_url_base:
+                pdf_url = f"{self.public_url_base.rstrip('/')}/pdf/{cache_key}"
+            else:
+                pdf_url = self.local_server.get_url_for_pdf(cache_key)
+
+            return await self.mineru.wait_for_completion(
+                await self.mineru.submit_task(pdf_url)
+            )
 
     async def close(self) -> None:
         """Close resources (HTTP session, etc.)."""
