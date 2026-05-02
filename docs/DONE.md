@@ -1,5 +1,24 @@
 # DONE
 
+## Evidence Table 实验内容抽取增强
+
+完成时间：2026-04-26
+
+本次通过 OpenSpec change `improve-evidence-table-extraction` 增强了 Evidence Table 的 dataset / metric 抽取能力，解决报告中 Evidence Table 经常为空的问题。
+
+主要调整：
+
+- `StructuredExtractor` 现在会从 experiment、evaluation、results、benchmark、dataset、metrics、empirical、ablation 等实验相关 section 聚合文本。
+- Dataset 抽取从小 allowlist 扩展为 allowlist + pattern 规则，覆盖 GSM8K、HumanEval、MMLU、PubMedQA 等 benchmark-style 名称。
+- Metric 抽取扩展到 EM、mAP、MRR、NDCG、AUROC、MAE、RMSE、ROUGE-L、pass@1 等常见实验指标。
+- `EvidenceChain` 的 Evidence Table row 会使用实验段落中的 support snippet，不再只输出泛化占位文本。
+- 对只有 metric、缺 dataset 的情况保留 `Not specified` 行，避免表格完全空白。
+- 已补充 `docs/SMOKE.md` 的本地 evidence extraction smoke。
+
+当前验收方式：
+
+- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 Evidence Table 非 allowlist 抽取表单执行手工验收。
+
 ## Analyze 输出路径收口
 
 完成时间：2026-04-26

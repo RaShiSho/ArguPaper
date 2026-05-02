@@ -276,3 +276,41 @@ uv run argupaper search "给我10篇有关多智能体的论文，要求近一�
 
 - 预期结果：第一条命令返回 `source=google_scholar` 的论文列表；第二条命令若 Semantic Scholar 返回 403/429，应出现 `Fell back to Google Scholar via SerpApi` warning 且仍返回论文结果
 - 记录：____
+
+### 11. Evidence Table 非 allowlist 抽取
+
+- 功能名称：Evidence Table 实验内容抽取增强
+- 适用场景：验证非原始 allowlist 的数据集与指标能进入 evidence result 和报告表格
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+from argupaper.chains.evidence import EvidenceChain
+
+markdown = """# Demo
+
+## Evaluation Setup
+We evaluate on GSM8K, HumanEval, and MMLU benchmarks. We report EM, pass@1, and ROUGE-L.
+The baseline is ReAct and we include ablation variants.
+
+## Results
+On GSM8K, our method reaches 82.1 EM. On HumanEval, pass@1 improves to 63.4.
+MMLU accuracy is 74.2.
+"""
+
+async def main():
+    result = await EvidenceChain().run(markdown)
+    print(result["datasets"])
+    print(result["metrics"])
+    print(result["has_baseline"], result["has_ablation"])
+    for row in result["evidence_table"]:
+        print(row)
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：datasets 包含 `GSM8K`、`HumanEval`、`MMLU`；metrics 包含 `EM`、`pass@1`、`ROUGE-L`；Evidence Table rows 的 support 字段包含具体结果句
+- 记录：____
