@@ -1,5 +1,17 @@
 # DONE
 
+## 本地 React 工作台接入
+
+完成时间：2026-05-03
+
+本次基于 OpenSpec change `add-react-local-workbench` 为当前 CLI 能力新增本地 Web 可视化入口：
+
+- 新增 `argupaper.web` FastAPI 后端，提供 `/api/search`、`/api/analyze`、`/api/jobs/{job_id}`、`/api/papers`、`/api/papers/{paper_id}` 与 `/api/config/status`。
+- `analyze` Web 入口采用后台任务模型，支持 job 状态、阶段进度、warning、失败原因和最终 Markdown 报告查询。
+- 新增 `frontend/` React + Vite + TypeScript 工作台，包含 Search、Analyze、Library 三个视图。
+- Search 与 Library 复用现有 workflow / PaperStore，不解析 CLI Rich 输出；CLI 命令保持兼容。
+- README 与 `docs/SMOKE.md` 已同步本地后端、前端和三条主工作流的手工验收步骤。
+
 ## Analyze 输出路径收口
 
 完成时间：2026-04-26

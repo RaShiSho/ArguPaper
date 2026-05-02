@@ -276,3 +276,84 @@ uv run argupaper search "给我10篇有关多智能体的论文，要求近一�
 
 - 预期结果：第一条命令返回 `source=google_scholar` 的论文列表；第二条命令若 Semantic Scholar 返回 403/429，应出现 `Fell back to Google Scholar via SerpApi` warning 且仍返回论文结果
 - 记录：____
+
+### 11. 本地 Web 工作台后端启动
+
+- 功能名称：Workbench API 启动与配置状态
+- 适用场景：验证本地 FastAPI 入口可启动，且不会暴露 API key 明文
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+uv run uvicorn argupaper.web.app:app --port 8000
+# 另开终端
+Invoke-RestMethod http://127.0.0.1:8000/api/config/status
+```
+
+- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path` 等字段；不返回任何 API key 明文
+- 记录：____
+
+### 12. 本地 Web 工作台前端启动
+
+- 功能名称：React Workbench 启动
+- 适用场景：验证 Vite 前端可访问，并能通过 `/api` 代理访问后端
+- 前置条件：后端已运行在 `127.0.0.1:8000`；已在 `frontend/` 执行 `npm install`
+- 执行命令：
+
+```powershell
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Analyze、Library 三个工作台视图；侧栏配置状态可正常显示或显示可读错误
+- 记录：____
+
+### 13. Workbench Search 视图
+
+- 功能名称：Workbench 检索可视化
+- 适用场景：验证 React Search 页面复用现有 Search Agent workflow
+- 前置条件：后端与前端均已启动；网络可访问所选检索源
+- 执行步骤：
+  1. 打开 Search 视图
+  2. 输入 `retrieval augmented generation`
+  3. 选择 `All configured`，limit 设为 `5`
+  4. 点击 Search
+- 预期结果：页面展示结果表格、Retrieved / Filtered / Parser 指标、warning 列表和 trace 路径；无需解析 CLI Rich 输出
+- 记录：____
+
+### 14. Workbench Analyze 视图
+
+- 功能名称：Workbench PDF 分析后台任务
+- 适用场景：验证 PDF 上传后会创建后台任务，并可轮询进度和报告
+- 前置条件：后端与前端均已启动；已配置 `MINERU_API_KEY`；准备一个本地 PDF
+- 执行步骤：
+  1. 打开 Analyze 视图
+  2. 上传 PDF
+  3. 设置 rounds 为 `2`
+  4. 点击 Start
+- 预期结果：页面显示 job 状态从 queued/running 到 succeeded 或 failed；running 阶段展示 progress timeline；成功时展示 Paper ID、cache、supplementary retrieval 和 Markdown 报告；失败时展示可读错误
+- 记录：____
+
+### 15. Workbench Library 视图
+
+- 功能名称：Workbench PaperStore 历史记录浏览
+- 适用场景：验证 React Library 页面读取本地保存记录
+- 前置条件：`PAPER_STORAGE_PATH` 下已有 analyze 保存的记录，或先执行一次 Analyze smoke
+- 执行步骤：
+  1. 打开 Library 视图
+  2. 查看记录列表或输入 query 过滤
+  3. 点击一条记录
+  4. 在 Report 与 Paper Markdown 标签间切换
+- 预期结果：页面显示元数据、Problem / Method / Experiment / Conclusion 结构化摘要，并能渲染保存的报告和论文 Markdown
+- 记录：____
+
+### 16. Workbench 错误处理
+
+- 功能名称：Workbench 用户可读错误
+- 适用场景：验证 Web API 和 UI 对常见错误给出明确反馈
+- 前置条件：后端与前端均已启动
+- 执行步骤：
+  1. 在 Analyze 视图上传非 PDF 文件并点击 Start
+  2. 在 Search 视图提交空 query 或会触发歧义澄清的请求
+- 预期结果：页面显示可读错误；非 PDF 返回 `Only .pdf uploads are supported.`；歧义搜索返回需要 clarification 的错误，而不是静默失败
+- 记录：____

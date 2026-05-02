@@ -2,11 +2,13 @@
 
 面向论文检索与分析的 CLI 工具。
 
-当前提供三个主命令：
+当前 CLI 提供三个主命令：
 
 - `argupaper search "<query>"`：检索论文
 - `argupaper analyze <local.pdf>`：分析本地 PDF
 - `argupaper papers`：查看本地已保存的论文分析记录
+
+同时新增本地 React 工作台，可视化使用上述能力。
 
 ## 环境要求
 
@@ -82,6 +84,32 @@ ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 
 ## 启动
 
+### 本地 Web 工作台
+
+后端 API：
+
+```bash
+uv run uvicorn argupaper.web.app:app --reload --port 8000
+```
+
+前端开发服务：
+
+```bash
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+打开 `http://127.0.0.1:5173`。Vite 已将 `/api` 代理到 `http://127.0.0.1:8000`。
+
+工作台当前包含：
+
+- Search：调用现有 Search Agent / Retrieval workflow，展示结果、warning 与 trace。
+- Analyze：上传本地 PDF，创建后台分析任务，并轮询展示进度、warning 与 Markdown 报告。
+- Library：读取 `PAPER_STORAGE_PATH` 下的本地 PaperStore 历史记录，展示结构化摘要、报告和论文 Markdown。
+
+### CLI
+
 查看帮助：
 
 ```bash
@@ -142,6 +170,7 @@ uv run argupaper --version
 ## 说明
 
 - `analyze` 当前只支持本地 PDF，不支持直接传 URL
+- Web 工作台同样只支持上传本地 PDF，不支持 URL PDF
 - `--output 1.md` 这类裸文件名会自动保存到 `output/1.md`；显式目录或绝对路径会按用户传入路径保存
 - `--save-report` 会在未指定 `--output` 时自动保存到 `output/<论文文件名>.md`
 - 分析结果会同时落到 `data/` 目录下
