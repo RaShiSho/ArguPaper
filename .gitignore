@@ -67,3 +67,4 @@ output/
 openspec/
 .codex/
 .claude/
+.agents/
