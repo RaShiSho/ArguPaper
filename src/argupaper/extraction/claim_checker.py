@@ -130,7 +130,11 @@ class ClaimChecker:
 
         for claim in claim_texts:
             match = self._best_evidence_match(claim, evidence_texts)
-            contradiction = self._find_contradiction(claim, evidence_texts)
+            contradiction = (
+                self._find_contradiction(claim, str(match["evidence"]))
+                if match is not None
+                else None
+            )
             if contradiction:
                 contradictions.append(contradiction)
 
@@ -277,29 +281,28 @@ class ClaimChecker:
         lowered = claim.casefold()
         return any(marker in lowered for marker in self.STRONG_CLAIM_MARKERS)
 
-    def _find_contradiction(self, claim: str, evidence_texts: list[str]) -> str | None:
+    def _find_contradiction(self, claim: str, evidence: str) -> str | None:
         claim_lowered = claim.casefold()
         claim_is_positive = any(marker in claim_lowered for marker in self.POSITIVE_EVIDENCE_MARKERS)
         claim_is_negative = any(marker in claim_lowered for marker in self.NEGATIVE_EVIDENCE_MARKERS)
 
-        for evidence in evidence_texts:
-            evidence_lowered = evidence.casefold()
-            evidence_is_positive = any(
-                marker in evidence_lowered for marker in self.POSITIVE_EVIDENCE_MARKERS
+        evidence_lowered = evidence.casefold()
+        evidence_is_positive = any(
+            marker in evidence_lowered for marker in self.POSITIVE_EVIDENCE_MARKERS
+        )
+        evidence_is_negative = any(
+            marker in evidence_lowered for marker in self.NEGATIVE_EVIDENCE_MARKERS
+        )
+        if claim_is_positive and evidence_is_negative:
+            return (
+                f"Claim '{self._truncate(claim, 120)}' conflicts with evidence "
+                f"'{self._truncate(evidence, 120)}'."
             )
-            evidence_is_negative = any(
-                marker in evidence_lowered for marker in self.NEGATIVE_EVIDENCE_MARKERS
+        if claim_is_negative and evidence_is_positive:
+            return (
+                f"Claim '{self._truncate(claim, 120)}' conflicts with evidence "
+                f"'{self._truncate(evidence, 120)}'."
             )
-            if claim_is_positive and evidence_is_negative:
-                return (
-                    f"Claim '{self._truncate(claim, 120)}' conflicts with evidence "
-                    f"'{self._truncate(evidence, 120)}'."
-                )
-            if claim_is_negative and evidence_is_positive:
-                return (
-                    f"Claim '{self._truncate(claim, 120)}' conflicts with evidence "
-                    f"'{self._truncate(evidence, 120)}'."
-                )
         return None
 
     def _truncate(self, text: str, limit: int) -> str:

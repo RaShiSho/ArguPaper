@@ -1,5 +1,15 @@
 # DONE
 
+## Claim-Evidence 无关矛盾过滤修复
+
+完成时间：2026-05-05
+
+本次修复了 claim checker 会用无关 evidence 误判 contradiction 的问题：
+
+- contradiction 判断改为只检查当前 claim 选中的 best evidence。
+- 未匹配到 evidence 的 claim 不再因为其他无关 evidence 中的负向词被标成矛盾。
+- `docs/SMOKE.md` 已补充无关负向 evidence 不应压掉正向匹配的验收表单。
+
 ## 本地 React 工作台接入
 
 完成时间：2026-05-03

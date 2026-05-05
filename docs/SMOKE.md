@@ -104,6 +104,36 @@ asyncio.run(main())
 - 预期结果：第一行输出 `True True`；`unsupported_claims` 为空列表；`missing_analyses` 为空列表
 - 记录：____
 
+### 4.3 Claim-Evidence 无关矛盾过滤
+
+- 功能名称：Claim-Evidence 无关矛盾过滤
+- 适用场景：验证 claim checker 不会用无关 evidence 中的负向词压掉已匹配的正向证据
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+from argupaper.extraction.claim_checker import ClaimChecker
+
+claims = [{"claim": "The proposed method improves retrieval accuracy."}]
+evidence = [
+    {"text": "The proposed method improves retrieval accuracy on benchmark tasks."},
+    {"text": "A separate baseline fails under adversarial stress."},
+]
+
+async def main():
+    result = await ClaimChecker().check_alignment(claims, evidence)
+    print(result["aligned_claims"])
+    print(result["contradictions"])
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：`aligned_claims` 包含该 claim；`contradictions` 为空列表
+- 记录：____
+
 ### 5. 本地论文历史记录读取
 
 - 功能名称：PaperStore 历史记录读取
