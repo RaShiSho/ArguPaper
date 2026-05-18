@@ -1,6 +1,7 @@
 """Workflow for CLI paper analysis."""
 
 import asyncio
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -15,10 +16,22 @@ from argupaper.memory.paper_store import PaperStore
 from argupaper.output.report import ReportGenerator
 from argupaper.pdf import MarkdownCache, MinerUClient, PDFPipeline
 from argupaper.workflows.models import AnalyzeOptions, AnalyzeWorkflowResult, SearchOptions
+from argupaper.workflows.errors import ConfigurationError, InputValidationError
 from argupaper.workflows.search_papers import SearchWorkflow
 
 ProgressCallback = Optional[Callable[[str], None]]
 PipelineFactory = Optional[Callable[[], PDFPipeline]]
+
+
+@dataclass(frozen=True)
+class MarkdownInput:
+    """Resolved Markdown input for the analyze workflow."""
+
+    markdown: str
+    paper_id: str
+    source_label: str
+    from_cache: bool
+    warnings: list[str] = field(default_factory=list)
 
 
 class AnalyzeWorkflow:
@@ -55,21 +68,103 @@ class AnalyzeWorkflow:
     ) -> AnalyzeWorkflowResult:
         """Run the analysis workflow."""
 
-        paper_path = Path(options.paper_path)
         self.debate_chain.max_rounds = options.rounds
         if progress_callback:
+            progress_callback("Loading Markdown input...")
+        markdown_input = await self._load_markdown_input(options, progress_callback)
+        return await self._run_analysis_on_markdown(markdown_input, options, progress_callback)
+
+    async def _load_markdown_input(
+        self,
+        options: AnalyzeOptions,
+        progress_callback: ProgressCallback = None,
+    ) -> MarkdownInput:
+        """Resolve analyze input from explicit Markdown, cache name, or legacy PDF."""
+
+        if options.markdown is not None:
+            cache_key = options.cache_key or options.paper_name or "inline-markdown"
+            return MarkdownInput(
+                markdown=options.markdown,
+                paper_id=str(cache_key),
+                source_label=options.source_label or str(cache_key),
+                from_cache=True,
+            )
+
+        if options.paper_name:
+            cache = MarkdownCache(cache_dir=self.config.pdf.cache_dir)
+            matches = cache.find_records(options.paper_name)
+            if not matches:
+                raise InputValidationError(
+                    "No converted Markdown cache entry matched "
+                    f"'{options.paper_name}'. Run `argupaper convert <pdf>` first."
+                )
+            if len(matches) > 1:
+                candidates = ", ".join(
+                    f"{record.original_filename or 'unknown'} ({record.cache_key})"
+                    for record in matches[:8]
+                )
+                raise InputValidationError(
+                    "Multiple converted Markdown cache entries matched "
+                    f"'{options.paper_name}'. Use a more specific filename or cache key. "
+                    f"Candidates: {candidates}"
+                )
+
+            record = matches[0]
+            markdown = cache.get_record_content(record)
+            if markdown is None:
+                raise InputValidationError(
+                    f"Matched cache entry '{record.cache_key}' is unreadable. "
+                    "Run `argupaper convert <pdf> --force` to regenerate it."
+                )
+            return MarkdownInput(
+                markdown=markdown,
+                paper_id=record.cache_key,
+                source_label=record.original_filename or record.cache_key,
+                from_cache=True,
+            )
+
+        if options.paper_path is None:
+            raise InputValidationError(
+                "Analyze requires a converted paper name or a legacy local PDF path."
+            )
+
+        paper_path = Path(options.paper_path)
+        if not paper_path.exists():
+            raise InputValidationError(f"PDF file not found: {paper_path}")
+        if paper_path.suffix.lower() != ".pdf":
+            raise InputValidationError("Input must be a converted paper name or a .pdf file.")
+
+        if progress_callback:
             progress_callback("Converting PDF to Markdown...")
-
         pipeline = self._build_pipeline()
-
-        warnings: list[str] = []
         try:
             result = await pipeline.process(paper_path, force_reconvert=options.force_reconvert)
         finally:
             await pipeline.close()
+        return MarkdownInput(
+            markdown=result.markdown or "",
+            paper_id=result.cache_key,
+            source_label=str(paper_path),
+            from_cache=result.from_cache,
+            warnings=[
+                "Legacy PDF analyze input is supported for compatibility. "
+                f"Recommended workflow: `argupaper convert \"{paper_path}\"` then "
+                f"`argupaper analyze \"{paper_path.stem}\"`."
+            ],
+        )
 
-        markdown = result.markdown or ""
-        paper_id = result.cache_key
+    async def _run_analysis_on_markdown(
+        self,
+        markdown_input: MarkdownInput,
+        options: AnalyzeOptions,
+        progress_callback: ProgressCallback = None,
+    ) -> AnalyzeWorkflowResult:
+        """Run analysis stages after Markdown input has been resolved."""
+
+        markdown = markdown_input.markdown
+        paper_id = markdown_input.paper_id
+        source_label = markdown_input.source_label
+        warnings = list(markdown_input.warnings)
         if not markdown.strip():
             warnings.append(
                 "PDF conversion returned empty Markdown; downstream analysis used fallback defaults."
@@ -112,7 +207,7 @@ class AnalyzeWorkflow:
             if progress_callback:
                 progress_callback("Running supplementary retrieval...")
             try:
-                query = analysis.get("title") or structured.get("problem") or paper_path.stem
+                query = analysis.get("title") or structured.get("problem") or Path(source_label).stem
                 search_result = await self.search_workflow.run(
                     SearchOptions(query=query, limit=3, source="semantic_scholar", verbose=False)
                 )
@@ -199,9 +294,9 @@ class AnalyzeWorkflow:
             {
                 "metadata": {
                     "paper_id": paper_id,
-                    "source": str(paper_path),
-                    "title": analysis.get("title") or paper_path.stem,
-                    "from_cache": result.from_cache,
+                    "source": source_label,
+                    "title": analysis.get("title") or Path(source_label).stem,
+                    "from_cache": markdown_input.from_cache,
                 },
                 "abstract": structured,
                 "markdown": markdown,
@@ -211,8 +306,8 @@ class AnalyzeWorkflow:
 
         return AnalyzeWorkflowResult(
             report_markdown=report_markdown,
-            report_title=analysis.get("title") or paper_path.stem,
-            from_cache=result.from_cache,
+            report_title=analysis.get("title") or Path(source_label).stem,
+            from_cache=markdown_input.from_cache,
             paper_id=paper_id,
             supplementary_search_used=supplementary_search_used,
             warnings=warnings,
@@ -230,6 +325,11 @@ class AnalyzeWorkflow:
     def _build_pipeline(self) -> PDFPipeline:
         if self.pipeline_factory is not None:
             return self.pipeline_factory()
+        if not self.config.pdf.api_key:
+            raise ConfigurationError(
+                "MINERU_API_KEY not set. Run cached analyze by paper name, "
+                "or configure MINERU_API_KEY before converting PDFs."
+            )
 
         mineru_client = MinerUClient(
             api_key=self.config.pdf.api_key,

@@ -51,22 +51,58 @@
 - 预期结果：解析结果中的年份范围应与当前年份一致；例如当前日期为 2026-04-25 时，`近一年` 应解析为 `year_from=2025`、`year_to=2026`
 - 记录：____
 
-### 4. 本地 PDF 分析主链路
+### 4. PDF 转 Markdown 缓存
 
-- 功能名称：本地 PDF 分析
-- 适用场景：验证 `analyze` 主链路可生成报告
+- 功能名称：PDF 转 Markdown 缓存
+- 适用场景：验证 `convert` 可将本地 PDF 转换为 Markdown 并写入 cache
 - 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；当前网络可访问 MinerU API 与其返回的签名上传 / 下载地址；准备一个本地 PDF 文件
-- 执行命令：`uv run argupaper analyze ./paper.pdf --output 1.md --rounds 2`
-- 预期结果：成功生成 Markdown 报告，裸文件名输出自动保存到 `output/1.md`；报告中应能看到与当前轮数一致的 debate 输出；若外部服务异常，应给出可见错误或 warning，而不是静默失败；`Disagreement` 不应出现明显正向结论
+- 执行命令：`uv run argupaper convert ./paper.pdf`
+- 预期结果：成功输出 cache key、cache path 与是否来自缓存；`data/cache` 下存在对应 `.md` 与 `.meta.json`
+- 记录：____
+
+### 4.0 本地 Markdown 分析主链路
+
+- 功能名称：本地 Markdown 分析
+- 适用场景：验证 `analyze` 可按已转换论文名读取缓存 Markdown 并生成报告
+- 前置条件：已先执行 `uv run argupaper convert ./paper.pdf`
+- 执行命令：`uv run argupaper analyze "paper" --output 1.md --rounds 2`
+- 预期结果：不重新提交 MinerU 转换任务；成功生成 Markdown 报告，裸文件名输出自动保存到 `output/1.md`；报告中应能看到与当前轮数一致的 debate 输出；若下游阶段异常，应给出可见错误或 warning，而不是静默失败
 - 记录：____
 
 ### 4.1 Analyze 自动报告保存
 
 - 功能名称：Analyze 自动报告保存
 - 适用场景：验证未显式传入 `--output` 时，可按论文文件名自动保存报告
-- 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；准备一个本地 PDF 文件
-- 执行命令：`uv run argupaper analyze ./paper.pdf --save-report`
+- 前置条件：已先执行 `uv run argupaper convert ./paper.pdf`
+- 执行命令：`uv run argupaper analyze "paper" --save-report`
 - 预期结果：成功生成 Markdown 报告，并自动保存到 `output/paper.md`
+- 记录：____
+
+### 4.1.1 Analyze 缓存未命中提示
+
+- 功能名称：Analyze 缓存未命中提示
+- 适用场景：验证按论文名分析未转换论文时不会静默调用 MinerU
+- 前置条件：确认 cache 中不存在名为 `unknown-paper` 的记录
+- 执行命令：`uv run argupaper analyze "unknown-paper"`
+- 预期结果：命令失败并提示未找到已转换 Markdown，要求先运行 `argupaper convert <pdf>`
+- 记录：____
+
+### 4.1.2 Analyze 缓存歧义提示
+
+- 功能名称：Analyze 缓存歧义提示
+- 适用场景：验证多个缓存记录匹配同一论文名时不会自动选择
+- 前置条件：构造两个 `.meta.json` 的 `original_filename` 均可匹配同一 stem 或前缀
+- 执行命令：`uv run argupaper analyze "paper"`
+- 预期结果：命令失败并列出候选 original filename 与 cache key，要求输入更精确名称或 cache key
+- 记录：____
+
+### 4.1.3 Legacy PDF Analyze 兼容
+
+- 功能名称：Legacy PDF Analyze 兼容
+- 适用场景：验证旧的 PDF 输入仍可运行但会提示迁移
+- 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；准备一个本地 PDF 文件
+- 执行命令：`uv run argupaper analyze ./paper.pdf --rounds 2`
+- 预期结果：命令仍可生成报告；warning 中包含推荐先运行 `argupaper convert` 再运行 `argupaper analyze <paper-name>` 的提示
 - 记录：____
 
 ### 4.2 Claim-Evidence 对齐

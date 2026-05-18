@@ -1,5 +1,16 @@
 # DONE
 
+## Analyze 输入与 PDF 转换解耦
+
+完成时间：2026-05-18
+
+本次基于 OpenSpec change `separate-pdf-convert-and-name-analyze` 将 PDF 转 Markdown 从 analyze 主链路中拆出：
+
+- 新增 `argupaper convert <pdf>`，专门负责本地 PDF 转 Markdown 并写入 `data/cache`。
+- `argupaper analyze <paper-name>` 可按原始 PDF 文件名、stem 或 cache key 读取已转换 Markdown，不再默认触发 MinerU。
+- 旧的 `argupaper analyze ./paper.pdf` 仍保留兼容，但会输出迁移 warning，推荐改用 `convert -> analyze <paper-name>`。
+- README 与 `docs/SMOKE.md` 已同步新命令和手工验收表单。
+
 ## Claim-Evidence 无关矛盾过滤修复
 
 完成时间：2026-05-05

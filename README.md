@@ -2,10 +2,11 @@
 
 面向论文检索与分析的 CLI 工具。
 
-当前 CLI 提供三个主命令：
+当前 CLI 提供四个主命令：
 
 - `argupaper search "<query>"`：检索论文
-- `argupaper analyze <local.pdf>`：分析本地 PDF
+- `argupaper convert <local.pdf>`：将本地 PDF 转换为 Markdown 并写入缓存
+- `argupaper analyze <paper-name>`：基于已缓存 Markdown 分析论文
 - `argupaper papers`：查看本地已保存的论文分析记录
 
 同时新增本地 React 工作台，可视化使用上述能力。
@@ -36,12 +37,12 @@ pip install -e .
 cp .env.example .env
 ```
 
-### `analyze` 前置配置
+### `convert` 前置配置
 
-当前 `analyze` 依赖远端 MinerU 服务处理 PDF。最少需要关注这些配置：
+当前 PDF 转 Markdown 依赖远端 MinerU 服务。最少需要关注这些配置：
 
 ```env
-# analyze 必需
+# convert 必需
 MINERU_API_KEY=your_api_key_here
 MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task
 
@@ -56,7 +57,7 @@ PAPER_STORAGE_PATH=./data/papers
 
 说明：
 
-- `MINERU_API_KEY`：必需。
+- `MINERU_API_KEY`：运行 `argupaper convert` 或 legacy PDF analyze 时必需；按论文名分析已缓存 Markdown 时不需要。
 - `MINERU_API_ENDPOINT`：建议使用 MinerU 官方精准解析 API：`https://mineru.net/api/v4/extract/task`。
 - `NGROK_URL_BASE`：仅在使用非标准 URL 解析 endpoint 时需要；默认官方 endpoint 会走本地文件签名上传链路，不依赖 ngrok。
 - `PAPER_STORAGE_PATH`：本地论文记录保存目录；未配置时默认为 `DATA_PATH/papers`。
@@ -129,23 +130,30 @@ uv run argupaper search "retrieval augmented generation" --limit 10 --source bot
 - 配置 `SERPAPI_API_KEY` 后，`--source both` 会自动加入 Google Scholar；当 `--source semantic_scholar` 遇到 403/429 且已配置 SerpApi 时，会回退到 Google Scholar。
 - 但当前去重逻辑仍存在已知限制：在同标题但实际不是同一篇论文的场景下，可能发生误合并。
 
-分析本地 PDF：
+转换本地 PDF：
 
 ```bash
-uv run argupaper analyze ./paper.pdf --output 1.md --rounds 2
+uv run argupaper convert ./paper.pdf
+uv run argupaper convert ./paper.pdf --output ./paper.md
+```
+
+基于已转换 Markdown 分析论文：
+
+```bash
+uv run argupaper analyze "paper" --output 1.md --rounds 2
 ```
 
 自动按论文文件名保存报告：
 
 ```bash
-uv run argupaper analyze ./paper.pdf --save-report
+uv run argupaper analyze "paper" --save-report
 ```
 
 运行前请确认：
 
-- 已配置 `MINERU_API_KEY`
-- 已配置 `MINERU_API_ENDPOINT`
-- 当前网络可访问 MinerU API 与其返回的签名上传 URL
+- 先执行过 `argupaper convert ./paper.pdf`，使 `data/cache` 中存在对应 Markdown 与 metadata
+- 只有执行 `convert` 或 legacy PDF analyze 时才需要配置 `MINERU_API_KEY` 与 `MINERU_API_ENDPOINT`
+- 执行 `convert` 时当前网络可访问 MinerU API 与其返回的签名上传 URL
 
 查看本地历史记录：
 
@@ -169,7 +177,8 @@ uv run argupaper --version
 
 ## 说明
 
-- `analyze` 当前只支持本地 PDF，不支持直接传 URL
+- `convert` 当前只支持本地 PDF，不支持直接传 URL
+- `analyze` 推荐传入已转换论文的原始文件名、文件名 stem 或 cache key；传入本地 PDF 路径仍兼容，但会提示迁移到 `convert -> analyze <paper-name>`
 - Web 工作台同样只支持上传本地 PDF，不支持 URL PDF
 - `--output 1.md` 这类裸文件名会自动保存到 `output/1.md`；显式目录或绝对路径会按用户传入路径保存
 - `--save-report` 会在未指定 `--output` 时自动保存到 `output/<论文文件名>.md`

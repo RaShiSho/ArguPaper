@@ -1,11 +1,32 @@
 """Local caching for converted Markdown files."""
 
+from __future__ import annotations
+
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from argupaper.pdf.types import CacheMetadata
 from argupaper.pdf.exceptions import CacheError
+
+
+@dataclass(frozen=True)
+class MarkdownCacheRecord:
+    """One cached Markdown entry and its metadata."""
+
+    cache_key: str
+    markdown_path: Path
+    metadata_path: Path
+    metadata: CacheMetadata | None
+
+    @property
+    def original_filename(self) -> str:
+        """Return the original PDF filename if metadata is available."""
+
+        if self.metadata is None:
+            return ""
+        return self.metadata.original_filename
 
 
 class MarkdownCache:
@@ -35,6 +56,11 @@ class MarkdownCache:
     def _get_meta_path(self, cache_key: str) -> Path:
         """Get the path to a cache metadata file."""
         return self.cache_dir / f"{cache_key}.meta.json"
+
+    def get_markdown_path(self, cache_key: str) -> Path:
+        """Return the cache path for a Markdown entry."""
+
+        return self._get_cache_path(cache_key)
 
     def exists(self, cache_key: str) -> bool:
         """Check if a cache entry exists."""
@@ -159,6 +185,70 @@ class MarkdownCache:
             return CacheMetadata(**data)
         except (OSError, json.JSONDecodeError) as e:
             return None
+
+    def list_records(self) -> list[MarkdownCacheRecord]:
+        """List cached Markdown records with best-effort metadata."""
+
+        records: list[MarkdownCacheRecord] = []
+        try:
+            for markdown_path in self.cache_dir.glob("*.md"):
+                cache_key = markdown_path.stem
+                records.append(
+                    MarkdownCacheRecord(
+                        cache_key=cache_key,
+                        markdown_path=markdown_path,
+                        metadata_path=self._get_meta_path(cache_key),
+                        metadata=self.get_metadata(cache_key),
+                    )
+                )
+        except OSError as e:
+            raise CacheError(f"Cannot read cache directory: {self.cache_dir}, error: {e}")
+        return records
+
+    def find_records(self, paper_name: str) -> list[MarkdownCacheRecord]:
+        """Find cache records by cache key, original filename, or filename stem.
+
+        Exact matches take precedence over prefix matches so common short names
+        do not accidentally select a broader candidate set.
+        """
+
+        query = self._normalize_lookup_text(paper_name)
+        if not query:
+            return []
+
+        records = self.list_records()
+        exact: list[MarkdownCacheRecord] = []
+        prefix: list[MarkdownCacheRecord] = []
+
+        for record in records:
+            lookup_values = self._lookup_values(record)
+            if query in lookup_values:
+                exact.append(record)
+                continue
+            if any(value.startswith(query) for value in lookup_values):
+                prefix.append(record)
+
+        return exact or prefix
+
+    def get_record_content(self, record: MarkdownCacheRecord) -> str | None:
+        """Read cached Markdown content for one record."""
+
+        return self.get(record.cache_key)
+
+    def _lookup_values(self, record: MarkdownCacheRecord) -> set[str]:
+        values = {self._normalize_lookup_text(record.cache_key)}
+        filename = record.original_filename
+        if filename:
+            filename_path = Path(filename)
+            values.add(self._normalize_lookup_text(filename))
+            values.add(self._normalize_lookup_text(filename_path.stem))
+        return {value for value in values if value}
+
+    def _normalize_lookup_text(self, value: str) -> str:
+        normalized = " ".join(str(value or "").strip().casefold().split())
+        if normalized.endswith(".pdf"):
+            normalized = normalized[:-4]
+        return normalized
 
     def get_cache_stats(self) -> dict:
         """Get statistics about the cache.

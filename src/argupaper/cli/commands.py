@@ -25,6 +25,7 @@ from argupaper.cli.formatters import (
 from argupaper.agents.search import SearchClarificationResponse
 from argupaper.config import load_config
 from argupaper.memory.paper_store import PaperStore
+from argupaper.pdf import ConversionResult, MarkdownCache, MinerUClient, PDFPipeline
 from argupaper.workflows import (
     AnalyzeOptions,
     AnalyzeWorkflow,
@@ -44,7 +45,7 @@ DEFAULT_OUTPUT_DIR = Path("output")
 def build_analyze_workflow() -> AnalyzeWorkflow:
     """Construct the default analyze workflow."""
 
-    config = load_config(require_pdf_api_key=True)
+    config = load_config(require_pdf_api_key=False)
     return AnalyzeWorkflow(config)
 
 
@@ -78,6 +79,14 @@ def resolve_analyze_output_path(output: str | None) -> Path | None:
     return DEFAULT_OUTPUT_DIR / output_path
 
 
+def resolve_convert_output_path(output: str | None) -> Path | None:
+    """Resolve convert export output paths exactly as provided."""
+
+    if output is None:
+        return None
+    return Path(output)
+
+
 def resolve_auto_report_path(paper_path: Path) -> Path:
     """Build the default report path from the input paper filename."""
 
@@ -91,8 +100,78 @@ def build_paper_store() -> PaperStore:
     return PaperStore(storage_path=config.paper_storage_path)
 
 
+async def _convert_pdf_with_pipeline(
+    pipeline: PDFPipeline,
+    pdf_path: Path,
+    force_reconvert: bool,
+) -> ConversionResult:
+    """Run PDF conversion and close pipeline resources in the same event loop."""
+
+    try:
+        return await pipeline.process(pdf_path, force_reconvert=force_reconvert)
+    finally:
+        await pipeline.close()
+
+
+def convert(
+    pdf: str = typer.Argument(..., help="Path to local PDF file"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Optional Markdown export path"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force reconvert even if cached"),
+) -> None:
+    """Convert a local PDF to Markdown and store it in the cache."""
+
+    try:
+        if pdf.startswith(("http://", "https://")):
+            raise InputValidationError("URL conversion is not supported. Please use a local PDF path.")
+        pdf_path = Path(pdf)
+        if not pdf_path.exists():
+            raise InputValidationError(f"PDF file not found: {pdf_path}")
+        if pdf_path.suffix.lower() != ".pdf":
+            raise InputValidationError("Input must be a .pdf file.")
+
+        config = load_config(require_pdf_api_key=True)
+        cache = MarkdownCache(cache_dir=config.pdf.cache_dir)
+        mineru_client = MinerUClient(
+            api_key=config.pdf.api_key,
+            model_version="vlm",
+            api_endpoint=config.pdf.api_endpoint,
+        )
+        pipeline = PDFPipeline(
+            mineru_client=mineru_client,
+            cache=cache,
+            public_url_base=config.pdf.public_url_base,
+        )
+
+        with Progress(
+            SpinnerColumn(SPINNER_NAME),
+            TextColumn("[progress.description]{task.description}"),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Converting PDF to Markdown...", total=None)
+            result = asyncio.run(_convert_pdf_with_pipeline(pipeline, pdf_path, force))
+            progress.update(task, completed=True)
+
+        markdown = result.markdown or ""
+        output_path = resolve_convert_output_path(output)
+        if output_path is not None:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(markdown, encoding="utf-8")
+
+        console.print(format_success("Conversion complete"))
+        console.print(format_info(f"Original filename: {pdf_path.name}"))
+        console.print(format_info(f"Cache key: {result.cache_key}"))
+        console.print(format_info(f"Cache path: {cache.get_markdown_path(result.cache_key).absolute()}"))
+        console.print(format_info(f"Loaded from cache: {'yes' if result.from_cache else 'no'}"))
+        if output_path is not None:
+            console.print(f"[dim]Markdown exported to: {output_path.absolute()}[/dim]")
+    except Exception as exc:
+        console.print(format_error(exc))
+        raise typer.Exit(code=1)
+
+
 def analyze(
-    paper: str = typer.Argument(..., help="Path to PDF file or URL"),
+    paper: str = typer.Argument(..., help="Converted paper name, cache key, or legacy local PDF path"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     save_report: bool = typer.Option(
         False,
@@ -108,26 +187,29 @@ def analyze(
     try:
         if paper.startswith(("http://", "https://")):
             raise InputValidationError(
-                "URL analysis is not part of the MVP CLI. Please use a local PDF path."
+                "URL analysis is not part of the MVP CLI. Please use a converted paper name or local PDF path."
             )
         if rounds <= 0:
             raise InputValidationError("--rounds must be greater than 0.")
 
         paper_path = Path(paper)
-        if not paper_path.exists():
-            raise InputValidationError(f"PDF file not found: {paper_path}")
-        if paper_path.suffix.lower() != ".pdf":
-            raise InputValidationError("Input must be a .pdf file.")
+        analyze_options: dict[str, object]
+        if paper_path.exists():
+            if paper_path.suffix.lower() != ".pdf":
+                raise InputValidationError("Input must be a converted paper name or a .pdf file.")
+            analyze_options = {"paper_path": paper_path}
+        else:
+            analyze_options = {"paper_name": paper}
 
         workflow = build_analyze_workflow()
         output_path = resolve_analyze_output_path(output)
         if output_path is None and save_report:
-            output_path = resolve_auto_report_path(paper_path)
+            output_path = resolve_auto_report_path(Path(paper))
 
         _run_analyze(
             workflow=workflow,
             options=AnalyzeOptions(
-                paper_path=paper_path,
+                **analyze_options,
                 output_path=output_path,
                 rounds=rounds,
                 force_reconvert=force,
