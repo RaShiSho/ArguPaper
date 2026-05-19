@@ -29,3 +29,4 @@ class DebateState(BaseModel):
     consensus_reached: bool = False
     support_positions: list[str] = Field(default_factory=list)
     skeptic_positions: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)

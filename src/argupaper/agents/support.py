@@ -1,16 +1,101 @@
 """Support agent - defends the paper's claims."""
 
+from langchain_core.prompts import ChatPromptTemplate
+
 from argupaper.agents.base import AgentBase, AgentConfig
+from argupaper.llm import LLMRouter, build_llm_router_runnable
+
+
+SUPPORT_SYSTEM_PROMPT = """You are the Support role in ArguPaper's research debate.
+Defend the paper's main claims using only the provided analysis, evidence, and related-work context.
+Be concise, concrete, and evidence-aware. Do not invent datasets, metrics, or claims."""
+
+SUPPORT_USER_PROMPT = """Round: {round_number}
+
+Paper analysis:
+{analysis}
+
+Evidence signals:
+{evidence}
+
+Structured extraction:
+{structured}
+
+Latest skeptic message:
+{latest_skeptic_message}
+
+Supplementary retrieval results:
+{supplementary_results}
+
+Write one support-side debate paragraph. Mention the strongest defensible claim and the specific evidence signal that supports it."""
 
 
 class SupportAgent(AgentBase):
     """Agent that provides supporting arguments for the paper."""
 
-    def __init__(self, config: AgentConfig):
+    def __init__(self, config: AgentConfig, llm_router: LLMRouter | None = None):
         super().__init__(config)
+        self.llm_router = llm_router
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", SUPPORT_SYSTEM_PROMPT),
+                ("human", SUPPORT_USER_PROMPT),
+            ]
+        )
 
     async def think(self, context: dict) -> str:
         """Generate supporting arguments."""
+
+        langchain_content = await self._think_with_langchain(context)
+        if langchain_content:
+            return langchain_content
+        return self._fallback_think(context)
+
+    async def _think_with_langchain(self, context: dict) -> str:
+        if self.llm_router is None:
+            self.add_warning("Support LangChain role skipped; no LLM router was provided.")
+            return ""
+        if not self.llm_router.has_provider("default"):
+            self.add_warning(
+                "Support LangChain role skipped; default LLM provider is not configured."
+            )
+            return ""
+
+        runnable = self.prompt | build_llm_router_runnable(
+            self.llm_router,
+            provider_alias="default",
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens,
+        )
+        try:
+            content = (await runnable.ainvoke(self._prompt_input(context))).strip()
+        except Exception as exc:
+            self.add_warning(
+                "Support LangChain role failed; used deterministic fallback: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return ""
+        if content:
+            return content
+        self.add_warning("Support LangChain role returned empty output; used deterministic fallback.")
+        return ""
+
+    def _prompt_input(self, context: dict) -> dict[str, str | int]:
+        return {
+            "round_number": int(context.get("round", 1)),
+            "analysis": self.format_context_value(context.get("analysis", {})),
+            "evidence": self.format_context_value(context.get("evidence", {})),
+            "structured": self.format_context_value(context.get("structured", {})),
+            "latest_skeptic_message": str(context.get("latest_skeptic_message", "")).strip()
+            or "None yet.",
+            "supplementary_results": self.format_context_value(
+                context.get("supplementary_results", []),
+                limit=2000,
+            ),
+        }
+
+    def _fallback_think(self, context: dict) -> str:
+        """Generate deterministic supporting arguments."""
 
         round_number = int(context.get("round", 1))
         analysis = context.get("analysis", {})

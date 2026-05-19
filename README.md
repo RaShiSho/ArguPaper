@@ -83,6 +83,12 @@ SEARCH_MAX_RESULTS=20
 ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 ```
 
+### Analyze Debate
+
+`argupaper analyze` 的 Support/Skeptic debate 已使用 LangChain `ChatPromptTemplate` + LCEL Runnable 编排，LLM 接入仍复用现有 `LLM_PROVIDER__DEFAULT__*` 配置，不需要新增 `langchain-openai` 或 OpenAI SDK。
+
+如果默认 LLM provider 未配置、请求失败或返回空内容，debate 会自动降级到确定性规则输出，并在 analyze warnings 中说明降级原因；Search Agent 不受此变更影响。
+
 ## 启动
 
 ### 本地 Web 工作台

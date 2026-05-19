@@ -1,5 +1,17 @@
 # DONE
 
+## LangChain Analyze Agent 编排
+
+完成时间：2026-05-19
+
+本次基于 OpenSpec change `langchain-analyze-agent-orchestration` 将 analyze 主链路中的 Support/Skeptic debate 重构为 LangChain `ChatPromptTemplate` + LCEL Runnable 编排：
+
+- 新增复用现有 `LLMRouter` 的 LangChain adapter，不新增 `langchain-openai`、OpenAI SDK 或新的环境变量。
+- `SupportAgent` 与 `SkepticAgent` 保持 `think(context) -> str` 接口不变，优先走 LangChain 角色链，LLM 不可用时降级到确定性规则输出。
+- `DebateChain` 保持原有轮次、顺序、early stop 和 `DebateState`/`AgentMessage` 输出结构，并把角色降级原因写入 warnings。
+- `AnalyzeWorkflow` 会合并 debate warnings，CLI/Web analyze 可以继续暴露降级原因；Search Agent 不受影响。
+- README 与 `docs/SMOKE.md` 已同步 LangChain debate 与 fallback 手工验收表单。
+
 ## Analyze 输入与 PDF 转换解耦
 
 完成时间：2026-05-18

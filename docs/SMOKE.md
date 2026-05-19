@@ -423,3 +423,77 @@ npm run dev -- --host 127.0.0.1 --port 5173
   2. 在 Search 视图提交空 query 或会触发歧义澄清的请求
 - 预期结果：页面显示可读错误；非 PDF 返回 `Only .pdf uploads are supported.`；歧义搜索返回需要 clarification 的错误，而不是静默失败
 - 记录：____
+
+### 17. LangChain Debate 角色链
+
+- 功能名称：LangChain Analyze Debate
+- 适用场景：验证 Support/Skeptic debate 可通过 LangChain prompt + runnable 路径生成结构完整的 `DebateState`
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+from argupaper.chains.debate import DebateChain
+
+class FakeClient:
+    async def chat(self, *, system_prompt, user_prompt, temperature, max_tokens):
+        if "Support role" in system_prompt:
+            return "LCEL support message"
+        return "LCEL skeptic message"
+
+class FakeRouter:
+    def has_provider(self, alias):
+        return True
+
+    def get_client(self, alias):
+        return FakeClient()
+
+async def main():
+    chain = DebateChain(max_rounds=1, llm_router=FakeRouter())
+    state = await chain.run({
+        "analysis": {"overview": "demo paper"},
+        "evidence": {"has_baseline": True, "has_ablation": True, "metrics": ["F1"]},
+    })
+    print(len(state.messages))
+    print(state.messages[0].content)
+    print(state.messages[1].content)
+    print(state.warnings)
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：第一行输出 `2`；后两行分别包含 `LCEL support message` 与 `LCEL skeptic message`；warnings 输出为空列表
+- 记录：____
+
+### 18. LangChain Debate 降级 warning
+
+- 功能名称：LangChain Debate fallback
+- 适用场景：验证默认 LLM provider 缺失时，debate 不阻断 analyze，并把降级原因写入 warnings
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+@'
+import asyncio
+from argupaper.chains.debate import DebateChain
+
+class MissingRouter:
+    def has_provider(self, alias):
+        return False
+
+async def main():
+    chain = DebateChain(max_rounds=1, llm_router=MissingRouter())
+    state = await chain.run({"analysis": {"overview": "demo"}, "evidence": {}})
+    print(len(state.messages))
+    print(state.messages[0].content.startswith("Initial support position"))
+    print(state.messages[1].content.startswith("Initial skeptic position"))
+    print(state.warnings)
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
+- 预期结果：第一行输出 `2`；第二、三行输出 `True`；warnings 中包含 `Support LangChain role skipped` 与 `Skeptic LangChain role skipped`
+- 记录：____

@@ -4,15 +4,23 @@ from argupaper.agents.base import AgentBase, AgentConfig
 from argupaper.agents.message import AgentMessage, DebateState
 from argupaper.agents.skeptic import SkepticAgent
 from argupaper.agents.support import SupportAgent
+from argupaper.llm import LLMRouter
 
 
 class DebateChain:
     """Chain for multi-agent debate with configurable rounds."""
 
-    def __init__(self, max_rounds: int = 3):
+    def __init__(self, max_rounds: int = 3, llm_router: LLMRouter | None = None):
         self.max_rounds = max(1, max_rounds)
-        self.support_agent = SupportAgent(AgentConfig(name="support", role="support"))
-        self.skeptic_agent = SkepticAgent(AgentConfig(name="skeptic", role="skeptic"))
+        self.llm_router = llm_router
+        self.support_agent = SupportAgent(
+            AgentConfig(name="support", role="support"),
+            llm_router=llm_router,
+        )
+        self.skeptic_agent = SkepticAgent(
+            AgentConfig(name="skeptic", role="skeptic"),
+            llm_router=llm_router,
+        )
 
     async def run(self, initial_context: dict) -> DebateState:
         """Run multi-round debate."""
@@ -25,7 +33,7 @@ class DebateChain:
         evidence_refs = self._collect_evidence_refs(initial_context)
 
         for round_number in range(1, self.max_rounds + 1):
-            support_content = await self._safe_agent_think(
+            support_content, support_warnings = await self._safe_agent_think(
                 self.support_agent,
                 "support",
                 {
@@ -36,6 +44,7 @@ class DebateChain:
                     ),
                 },
             )
+            self._extend_warnings(state, support_warnings)
             self.support_agent.add_message("assistant", support_content)
 
             support_message = AgentMessage(
@@ -48,7 +57,7 @@ class DebateChain:
             state.messages.append(support_message)
             state.support_positions.append(support_content)
 
-            skeptic_content = await self._safe_agent_think(
+            skeptic_content, skeptic_warnings = await self._safe_agent_think(
                 self.skeptic_agent,
                 "skeptic",
                 {
@@ -57,6 +66,7 @@ class DebateChain:
                     "latest_support_message": support_content,
                 },
             )
+            self._extend_warnings(state, skeptic_warnings)
             self.skeptic_agent.add_message("assistant", skeptic_content)
 
             skeptic_message = AgentMessage(
@@ -76,16 +86,27 @@ class DebateChain:
 
         return state
 
-    async def _safe_agent_think(self, agent: AgentBase, role: str, context: dict) -> str:
+    async def _safe_agent_think(self, agent: AgentBase, role: str, context: dict) -> tuple[str, list[str]]:
         """Run one debate role and convert bad output into a reportable fallback."""
 
         try:
             content = (await agent.think(context)).strip()
         except Exception as exc:
-            return self._fallback_agent_content(role, f"{type(exc).__name__}: {exc}")
+            reason = f"{type(exc).__name__}: {exc}"
+            warnings = agent.consume_warnings()
+            warnings.append(f"{role} debate agent failed; used fallback: {reason}")
+            return self._fallback_agent_content(role, reason), warnings
+
+        warnings = agent.consume_warnings()
         if content:
-            return content
-        return self._fallback_agent_content(role, "empty response")
+            return content, warnings
+        warnings.append(f"{role} debate agent returned empty output; used fallback.")
+        return self._fallback_agent_content(role, "empty response"), warnings
+
+    def _extend_warnings(self, state: DebateState, warnings: list[str]) -> None:
+        for warning in warnings:
+            if warning and warning not in state.warnings:
+                state.warnings.append(warning)
 
     def _fallback_agent_content(self, role: str, reason: str) -> str:
         if role == "support":

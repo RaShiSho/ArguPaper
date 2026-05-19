@@ -12,6 +12,7 @@ from argupaper.agents.message import AgentMessage, DebateState
 from argupaper.config import Config
 from argupaper.extraction.structured import StructuredExtractor
 from argupaper.judge.consensus import ConsensusDetector
+from argupaper.llm import LLMRouter
 from argupaper.memory.paper_store import PaperStore
 from argupaper.output.report import ReportGenerator
 from argupaper.pdf import MarkdownCache, MinerUClient, PDFPipeline
@@ -49,12 +50,18 @@ class AnalyzeWorkflow:
         paper_store: Optional[PaperStore] = None,
         search_workflow: Optional[SearchWorkflow] = None,
         pipeline_factory: PipelineFactory = None,
+        llm_router: Optional[LLMRouter] = None,
     ):
         self.config = config
         self.extractor = extractor or StructuredExtractor()
         self.analysis_chain = analysis_chain or AnalysisChain()
         self.evidence_chain = evidence_chain or EvidenceChain()
-        self.debate_chain = debate_chain or DebateChain(max_rounds=config.debate.max_rounds)
+        self.llm_router = llm_router or (None if debate_chain is not None else LLMRouter(config.model))
+        self._owns_llm_router = llm_router is None and self.llm_router is not None
+        self.debate_chain = debate_chain or DebateChain(
+            max_rounds=config.debate.max_rounds,
+            llm_router=self.llm_router,
+        )
         self.consensus_detector = consensus_detector or ConsensusDetector()
         self.report_generator = report_generator or ReportGenerator()
         self.paper_store = paper_store or PaperStore(storage_path=config.paper_storage_path)
@@ -68,11 +75,15 @@ class AnalyzeWorkflow:
     ) -> AnalyzeWorkflowResult:
         """Run the analysis workflow."""
 
-        self.debate_chain.max_rounds = options.rounds
-        if progress_callback:
-            progress_callback("Loading Markdown input...")
-        markdown_input = await self._load_markdown_input(options, progress_callback)
-        return await self._run_analysis_on_markdown(markdown_input, options, progress_callback)
+        try:
+            self.debate_chain.max_rounds = options.rounds
+            if progress_callback:
+                progress_callback("Loading Markdown input...")
+            markdown_input = await self._load_markdown_input(options, progress_callback)
+            return await self._run_analysis_on_markdown(markdown_input, options, progress_callback)
+        finally:
+            if self._owns_llm_router and self.llm_router is not None:
+                await self.llm_router.close()
 
     async def _load_markdown_input(
         self,
@@ -231,6 +242,9 @@ class AnalyzeWorkflow:
         }
         try:
             debate_state = await self.debate_chain.run(debate_context)
+            warnings.extend(
+                warning for warning in debate_state.warnings if warning not in warnings
+            )
             if not debate_state.messages:
                 warnings.append("Debate produced no messages; using fallback debate state.")
                 debate_state = self._build_fallback_debate_state(debate_context)
