@@ -4,30 +4,11 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from argupaper.agents.base import AgentBase, AgentConfig
 from argupaper.llm import LLMRouter, build_llm_router_runnable
+from argupaper.prompts import load_prompt
 
 
-SKEPTIC_SYSTEM_PROMPT = """You are the Skeptic role in ArguPaper's research debate.
-Critically examine whether the paper's claims are actually supported by the provided evidence.
-Be concise, specific, and fair. Do not invent missing evidence; name the concrete gap or contradiction when present."""
-
-SKEPTIC_USER_PROMPT = """Round: {round_number}
-
-Paper analysis:
-{analysis}
-
-Evidence signals:
-{evidence}
-
-Structured extraction:
-{structured}
-
-Latest support message:
-{latest_support_message}
-
-Supplementary retrieval results:
-{supplementary_results}
-
-Write one skeptic-side debate paragraph. Focus on unresolved evidence gaps, contradictions, missing baseline/ablation/metrics, or external validity risks."""
+SKEPTIC_SYSTEM_PROMPT = load_prompt("skeptic_agent", "system.md")
+SKEPTIC_USER_PROMPT = load_prompt("skeptic_agent", "user.md")
 
 
 class SkepticAgent(AgentBase):

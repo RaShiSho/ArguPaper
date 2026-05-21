@@ -4,30 +4,11 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from argupaper.agents.base import AgentBase, AgentConfig
 from argupaper.llm import LLMRouter, build_llm_router_runnable
+from argupaper.prompts import load_prompt
 
 
-SUPPORT_SYSTEM_PROMPT = """You are the Support role in ArguPaper's research debate.
-Defend the paper's main claims using only the provided analysis, evidence, and related-work context.
-Be concise, concrete, and evidence-aware. Do not invent datasets, metrics, or claims."""
-
-SUPPORT_USER_PROMPT = """Round: {round_number}
-
-Paper analysis:
-{analysis}
-
-Evidence signals:
-{evidence}
-
-Structured extraction:
-{structured}
-
-Latest skeptic message:
-{latest_skeptic_message}
-
-Supplementary retrieval results:
-{supplementary_results}
-
-Write one support-side debate paragraph. Mention the strongest defensible claim and the specific evidence signal that supports it."""
+SUPPORT_SYSTEM_PROMPT = load_prompt("support_agent", "system.md")
+SUPPORT_USER_PROMPT = load_prompt("support_agent", "user.md")
 
 
 class SupportAgent(AgentBase):

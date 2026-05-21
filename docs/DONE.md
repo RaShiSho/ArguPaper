@@ -1,5 +1,16 @@
 # DONE
 
+## Agent Prompt Markdown 集中化
+
+完成时间：2026-05-21
+
+本次将 agent 提示词统一收敛到 `src/argupaper/prompts/` 下的 Markdown 文件，并由脚本运行时读取：
+
+- 新增 `argupaper.prompts.load_prompt()`，统一按 UTF-8 读取 prompt 模板。
+- `SupportAgent` 与 `SkepticAgent` 的 system/user prompt 已从 agent 声明脚本迁移到 `.md` 文件。
+- `SearchRequestParser` 的解析 prompt 从 `.txt` 迁移为 `.md`，相对日期提示也改为 Markdown 模板。
+- `docs/SMOKE.md` 已补充不依赖外部服务的 prompt 加载验收表单。
+
 ## LangChain Analyze Agent 编排
 
 完成时间：2026-05-19

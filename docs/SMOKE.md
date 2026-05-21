@@ -51,6 +51,15 @@
 - 预期结果：解析结果中的年份范围应与当前年份一致；例如当前日期为 2026-04-25 时，`近一年` 应解析为 `year_from=2025`、`year_to=2026`
 - 记录：____
 
+### 3.2 Agent Markdown Prompt 加载
+
+- 功能名称：Agent Markdown Prompt 加载
+- 适用场景：验证 agent 提示词统一从 `src/argupaper/prompts/` 下的 `.md` 文件读取
+- 前置条件：已执行 `uv sync`
+- 执行命令：`uv run python -c "from argupaper.agents.support import SUPPORT_SYSTEM_PROMPT; from argupaper.agents.skeptic import SKEPTIC_SYSTEM_PROMPT; from argupaper.agents.search import SearchRequestParser; from argupaper.config import load_config; parser = SearchRequestParser(load_config(require_pdf_api_key=False)); assert 'Support role' in SUPPORT_SYSTEM_PROMPT; assert 'Skeptic role' in SKEPTIC_SYSTEM_PROMPT; assert 'Current local date' in parser.system_prompt; print('prompt loading ok')"`
+- 预期结果：命令输出 `prompt loading ok`，不出现 prompt 文件缺失、导入失败或 UTF-8 读取错误
+- 记录：____
+
 ### 4. PDF 转 Markdown 缓存
 
 - 功能名称：PDF 转 Markdown 缓存

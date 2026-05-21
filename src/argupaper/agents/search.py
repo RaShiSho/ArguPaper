@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from argupaper.config import Config
 from argupaper.llm import LLMRouter, extract_json_object
+from argupaper.prompts import load_prompt
 from argupaper.workflows.errors import ExternalServiceError, InputValidationError
 from argupaper.workflows.models import (
     SearchAgentResult,
@@ -72,17 +73,14 @@ class SearchRequestParser:
     def __init__(self, config: Config, llm_router: LLMRouter | None = None):
         self.config = config
         self.llm_router = llm_router
-        prompts_dir = Path(__file__).resolve().parents[1] / "prompts" / "search_agent"
         current_date = datetime.now().strftime("%Y-%m-%d")
         self.system_prompt = "\n\n".join(
             [
-                prompts_dir.joinpath("parse_request_system.txt").read_text(encoding="utf-8").strip(),
-                (
-                    f"Current local date: {current_date}. "
-                    "Resolve relative time expressions such as '近一年', '最近一年', "
-                    "'过去一年', and 'last year' against this date."
+                load_prompt("search_agent", "parse_request_system.md"),
+                load_prompt("search_agent", "relative_date_instruction.md").format(
+                    current_date=current_date
                 ),
-                prompts_dir.joinpath("parse_request_schema.txt").read_text(encoding="utf-8").strip(),
+                load_prompt("search_agent", "parse_request_schema.md"),
             ]
         )
 
