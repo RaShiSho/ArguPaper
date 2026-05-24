@@ -143,6 +143,20 @@ uv run argupaper convert ./paper.pdf
 uv run argupaper convert ./paper.pdf --output ./paper.md
 ```
 
+批量转换目录中的 PDF：
+
+```bash
+uv run argupaper convert --folder ./papers
+uv run argupaper convert -d ./papers --force
+```
+
+说明：
+
+- `--folder/-d` 只扫描目录直属条目，不递归进入子目录。
+- 目录模式会跳过非 PDF 文件、子目录或不可读条目，并继续处理后续 PDF。
+- 目录模式不支持 `--output`；转换结果默认写入现有 `data/cache` Markdown 缓存。
+- 每次目录转换会在 `data/convert_runs/<run-id>.jsonl` 写入执行日志，记录成功、缓存命中、失败、跳过和最终汇总。
+
 基于已转换 Markdown 分析论文：
 
 ```bash
@@ -184,6 +198,7 @@ uv run argupaper --version
 ## 说明
 
 - `convert` 当前只支持本地 PDF，不支持直接传 URL
+- `convert --folder <dir>` 支持目录批量转换，目录短参数为 `-d`；`-f` 仍表示 `--force`
 - `analyze` 推荐传入已转换论文的原始文件名、文件名 stem 或 cache key；传入本地 PDF 路径仍兼容，但会提示迁移到 `convert -> analyze <paper-name>`
 - Web 工作台同样只支持上传本地 PDF，不支持 URL PDF
 - `--output 1.md` 这类裸文件名会自动保存到 `output/1.md`；显式目录或绝对路径会按用户传入路径保存

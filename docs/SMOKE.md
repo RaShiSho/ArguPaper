@@ -69,6 +69,15 @@
 - 预期结果：成功输出 cache key、cache path 与是否来自缓存；`data/cache` 下存在对应 `.md` 与 `.meta.json`
 - 记录：____
 
+### 4.0.1 PDF 目录批量转换
+
+- 功能名称：PDF 目录批量转换
+- 适用场景：验证 `convert --folder` 可批量处理目录直属 PDF，并跳过非 PDF 或子目录
+- 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；当前网络可访问 MinerU API 与其返回的签名上传 / 下载地址；准备一个目录，包含至少两个 PDF、一个 `.txt` 文件和一个子目录
+- 执行命令：`uv run argupaper convert --folder ./papers`
+- 预期结果：命令显示逐文件处理进度；PDF 被转换或命中缓存；`.txt` 与子目录被跳过；最终汇总包含 total、processed、succeeded、cache、failed、skipped；`data/convert_runs/` 下生成对应 JSONL 日志
+- 记录：____
+
 ### 4.0 本地 Markdown 分析主链路
 
 - 功能名称：本地 Markdown 分析

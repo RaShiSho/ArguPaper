@@ -1,5 +1,16 @@
 # DONE
 
+## Convert 目录批量转换
+
+完成时间：2026-05-24
+
+本次基于 OpenSpec change `batch-convert-folder` 为 `argupaper convert` 增加目录批量转换能力：
+
+- 新增 `argupaper convert --folder <dir>` / `-d <dir>`，按目录直属 PDF 顺序执行现有 PDF 转 Markdown 缓存流程。
+- 保留 `--force/-f` 原有语义；目录模式会跳过非 PDF、子目录或不可读条目，并继续处理后续文件。
+- 每次目录转换会输出处理进度与汇总，并在 `data/convert_runs/<run-id>.jsonl` 记录可追踪执行日志。
+- README 与 `docs/SMOKE.md` 已同步批量转换命令和手工验收表单。
+
 ## Agent Prompt Markdown 集中化
 
 完成时间：2026-05-21
