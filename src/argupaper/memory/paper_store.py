@@ -5,11 +5,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+LIBRARY_STATUS_CONVERTED = "converted"
+LIBRARY_STATUS_ANALYZED = "analyzed"
+
 
 class PaperStore:
     """Storage for papers with Level 1-3 structured knowledge."""
 
-    def __init__(self, storage_path: Optional[str] = None):
+    def __init__(self, storage_path: Optional[str] = None) -> None:
         self.storage_path = Path(storage_path) if storage_path else Path("./data/papers")
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
@@ -19,10 +22,61 @@ class PaperStore:
         paper_dir = self.storage_path / paper_id
         paper_dir.mkdir(parents=True, exist_ok=True)
 
-        metadata = knowledge.get("metadata", {})
+        metadata = dict(knowledge.get("metadata", {}))
+        metadata["library_status"] = LIBRARY_STATUS_ANALYZED
         abstract = knowledge.get("abstract", {})
         markdown = knowledge.get("markdown", "")
         report = knowledge.get("report", "")
+
+        (paper_dir / "metadata.json").write_text(
+            json.dumps(metadata, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (paper_dir / "abstract.json").write_text(
+            json.dumps(abstract, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (paper_dir / "paper.md").write_text(markdown, encoding="utf-8")
+        (paper_dir / "report.md").write_text(report, encoding="utf-8")
+
+    async def save_converted_paper(
+        self,
+        *,
+        paper_id: str,
+        source: str,
+        title: str,
+        markdown: str,
+        from_cache: bool,
+    ) -> None:
+        """Save a converted-only paper record for local library browsing."""
+
+        await self.save_paper_record(
+            paper_id=paper_id,
+            metadata={
+                "paper_id": paper_id,
+                "source": source,
+                "title": title,
+                "from_cache": from_cache,
+                "library_status": LIBRARY_STATUS_CONVERTED,
+            },
+            abstract={},
+            markdown=markdown,
+            report="",
+        )
+
+    async def save_paper_record(
+        self,
+        *,
+        paper_id: str,
+        metadata: dict,
+        abstract: dict,
+        markdown: str,
+        report: str,
+    ) -> None:
+        """Save one paper record with explicit metadata and content layers."""
+
+        paper_dir = self.storage_path / paper_id
+        paper_dir.mkdir(parents=True, exist_ok=True)
 
         (paper_dir / "metadata.json").write_text(
             json.dumps(metadata, indent=2, ensure_ascii=False),
@@ -74,7 +128,10 @@ class PaperStore:
                 abstract_text = abstract_path.read_text(encoding="utf-8")
             searchable_text = " ".join(
                 [
-                    *(str(metadata.get(field, "")) for field in ("title", "source", "paper_id")),
+                    *(
+                        str(metadata.get(field, ""))
+                        for field in ("title", "source", "paper_id", "library_status")
+                    ),
                     abstract_text,
                 ]
             ).lower()
@@ -126,6 +183,7 @@ class PaperStore:
             return {}
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         metadata.setdefault("paper_id", paper_dir.name)
+        metadata.setdefault("library_status", LIBRARY_STATUS_ANALYZED)
         metadata["updated_at"] = self._format_mtime(metadata_path)
         return metadata
 

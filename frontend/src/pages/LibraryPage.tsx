@@ -90,6 +90,7 @@ export function LibraryPage(): JSX.Element {
           ) : (
             records.map((record) => {
               const paperId = String(record.paper_id ?? "");
+              const libraryStatus = record.library_status ?? "analyzed";
               return (
                 <button
                   className={`record-row ${paperId === selectedId ? "selected" : ""}`}
@@ -101,6 +102,7 @@ export function LibraryPage(): JSX.Element {
                   <span>
                     <strong>{record.title || "Untitled"}</strong>
                     <small>{paperId || "N/A"}</small>
+                    <small className={`library-status library-status-${libraryStatus}`}>{libraryStatus}</small>
                   </span>
                   <time>{record.updated_at || "N/A"}</time>
                 </button>
@@ -122,6 +124,10 @@ export function LibraryPage(): JSX.Element {
                 <div>
                   <span>Paper ID</span>
                   <strong>{String(detail.metadata.paper_id ?? selectedId)}</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{String(detail.metadata.library_status ?? "analyzed")}</strong>
                 </div>
                 <div>
                   <span>Source</span>

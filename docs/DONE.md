@@ -1,5 +1,17 @@
 # DONE
 
+## Convert 结果进入 PaperStore
+
+完成时间：2026-05-30
+
+本次基于 OpenSpec change `store-converted-papers-in-paper-store` 将 `argupaper convert` 的成功结果同步写入本地 PaperStore，使只完成 Markdown 转换、尚未 analyze 的论文也能通过 `argupaper papers` 和 Web Library 浏览：
+
+- `PaperStore` 新增 converted 记录保存能力，并用互斥的 `library_status` 区分 `converted` 与 `analyzed`。
+- `ConvertWorkflow` 在单文件转换、目录批量转换和 cache hit 场景下都会同步 PaperStore 记录。
+- `AnalyzeWorkflow` 写入 PaperStore 时会将同一 `paper_id` 升级为 `analyzed` 状态。
+- CLI `argupaper papers` 与 Web Library 列表/详情已展示记录状态。
+- `docs/SMOKE.md` 已补充 convert-only 入库、cache hit、analyze 升级和 Web Library 展示的手工验收步骤。
+
 ## 运行日志统一目录收口
 
 完成时间：2026-05-30

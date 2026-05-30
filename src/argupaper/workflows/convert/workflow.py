@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from uuid import uuid4
 
 from argupaper.config import Config
+from argupaper.memory.paper_store import PaperStore
 from argupaper.services.pdf import ConversionResult, MarkdownCache, MinerUClient, PDFPipeline
 from argupaper.workflows.convert.options import ConvertOptions
 from argupaper.workflows.convert.result import ConvertWorkflowResult, FolderConvertSummary
@@ -21,8 +22,9 @@ FileEventCallback = Optional[Callable[[str], None]]
 class ConvertWorkflow:
     """Convert local PDFs to cached Markdown."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, paper_store: Optional[PaperStore] = None) -> None:
         self.config = config
+        self.paper_store = paper_store or PaperStore(storage_path=config.paper_storage_path)
 
     async def run(
         self,
@@ -69,6 +71,7 @@ class ConvertWorkflow:
             await pipeline.close()
 
         markdown = result.markdown or ""
+        await self._sync_converted_paper(options.pdf_path, result)
         if options.output_path is not None:
             options.output_path.parent.mkdir(parents=True, exist_ok=True)
             options.output_path.write_text(markdown, encoding="utf-8")
@@ -131,10 +134,11 @@ class ConvertWorkflow:
                 summary.processed += 1
                 try:
                     result = await pipeline.process(entry, force_reconvert=options.force_reconvert)
+                    await self._sync_converted_paper(entry, result)
+                    cache_path = cache.get_markdown_path(result.cache_key).absolute()
                     summary.success += 1
                     if result.from_cache:
                         summary.cache_hits += 1
-                    cache_path = cache.get_markdown_path(result.cache_key).absolute()
                     self._write_run_event(
                         log_path,
                         run_id=run_id,
@@ -232,6 +236,17 @@ class ConvertWorkflow:
         if entry.suffix.lower() != ".pdf":
             return "not a PDF file"
         return None
+
+    async def _sync_converted_paper(self, pdf_path: Path, result: ConversionResult) -> None:
+        """Persist a successful conversion into the local PaperStore."""
+
+        await self.paper_store.save_converted_paper(
+            paper_id=result.cache_key,
+            source=str(pdf_path),
+            title=pdf_path.stem,
+            markdown=result.markdown or "",
+            from_cache=result.from_cache,
+        )
 
 
 __all__ = ["ConvertWorkflow"]

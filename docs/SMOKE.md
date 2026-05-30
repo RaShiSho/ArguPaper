@@ -257,3 +257,22 @@ uv run argupaper papers --help
 
 - 预期结果：所有 CLI help 命令正常显示；不出现导入错误或命令缺失
 - 记录：____
+
+### 22. Convert 结果进入 PaperStore
+
+- 功能名称：Convert-only 论文进入本地论文库
+- 适用场景：验证 `argupaper convert` 成功后，尚未 analyze 的论文也能通过 PaperStore 浏览，并用 `library_status` 与 analyzed 记录区分
+- 前置条件：已执行 `uv sync`；已配置 `MINERU_API_KEY`；准备一个本地 PDF
+- 执行命令：
+```powershell
+uv run argupaper convert .\sample.pdf
+uv run argupaper papers
+uv run argupaper papers <paper_id> --markdown
+uv run argupaper convert .\sample.pdf
+uv run argupaper analyze sample
+uv run argupaper papers
+```
+
+- 预期结果：首次 convert 后 `argupaper papers` 出现同一 cache key 的记录，Status 为 `converted`；`--markdown` 可显示保存的 Markdown；第二次 convert 使用 cache 时记录仍存在；analyze 后同一记录 Status 升级为 `analyzed`，并包含结构化摘要和报告
+- Web 验收：启动后端和前端，打开 Library 视图，确认列表和详情都显示 converted/analyzed 状态，converted 记录可查看 Paper Markdown
+- 记录：____

@@ -85,6 +85,7 @@ export interface PaperRecord {
   source?: string;
   updated_at?: string;
   from_cache?: boolean;
+  library_status?: "converted" | "analyzed";
 }
 
 export interface PaperDetailResponse {

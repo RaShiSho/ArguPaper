@@ -488,6 +488,29 @@ td a {
   font-size: 0.8125rem;
 }
 
+.library-status {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid #b9c4cf;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.library-status-converted {
+  color: #6a4a00;
+  background: #fff7dd;
+  border-color: #e0bf63;
+}
+
+.library-status-analyzed {
+  color: #11623f;
+  background: #e8f7ef;
+  border-color: #9cd8b9;
+}
+
 .record-row time {
   grid-column: 2;
 }
@@ -501,7 +524,7 @@ td a {
 
 .metadata-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid #d6dde4;

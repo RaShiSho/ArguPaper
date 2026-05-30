@@ -30,7 +30,7 @@ def papers(
     report: bool = typer.Option(False, "--report", help="Render the saved report for a paper"),
     markdown: bool = typer.Option(False, "--markdown", help="Render the saved paper markdown"),
 ) -> None:
-    """Inspect locally saved paper analysis records."""
+    """Inspect locally saved paper library records."""
 
     try:
         result = asyncio.run(
@@ -66,4 +66,3 @@ def papers(
 
 
 __all__ = ["papers"]
-

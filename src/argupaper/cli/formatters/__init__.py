@@ -154,6 +154,7 @@ def format_paper_records(records: list[dict[str, Any]]) -> None:
     )
     table.add_column("#", style="dim", width=3)
     table.add_column("Paper ID", style="cyan")
+    table.add_column("Status", style="magenta")
     table.add_column("Title", style="white")
     table.add_column("Source", style="dim")
     table.add_column("Updated", style="green")
@@ -162,6 +163,7 @@ def format_paper_records(records: list[dict[str, Any]]) -> None:
         table.add_row(
             str(index),
             str(record.get("paper_id", "N/A")),
+            str(record.get("library_status", "analyzed")),
             str(record.get("title", "Untitled")),
             str(record.get("source", "N/A")),
             str(record.get("updated_at", "N/A")),
@@ -177,6 +179,7 @@ def format_paper_detail(record: dict[str, Any]) -> None:
     metadata = record.get("metadata", {})
     summary = Text()
     summary.append(f"Paper ID: {metadata.get('paper_id', 'N/A')}\n", style="cyan")
+    summary.append(f"Status: {metadata.get('library_status', 'analyzed')}\n", style="magenta")
     summary.append(f"Title: {metadata.get('title', 'Untitled')}\n", style="white")
     summary.append(f"Source: {metadata.get('source', 'N/A')}\n", style="dim")
     summary.append(f"From cache: {'yes' if metadata.get('from_cache') else 'no'}\n", style="cyan")
