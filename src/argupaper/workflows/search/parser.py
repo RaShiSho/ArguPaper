@@ -427,7 +427,7 @@ class SearchRequestRunner:
     def _compute_candidate_limit(self, filters: SearchFilters, options: SearchOptions) -> int:
         target = filters.target_count or options.limit or self.config.retrieval.default_limit
         computed = max(target * 5, 30)
-        bounded = min(computed, self.config.search_agent.max_candidates)
+        bounded = min(computed, self.config.search_workflow.max_candidates)
         return max(bounded, target)
 
     def _filter_results(self, results: list[SearchResult], filters: SearchFilters) -> list[SearchResult]:

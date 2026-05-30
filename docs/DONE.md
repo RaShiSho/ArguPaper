@@ -1,15 +1,28 @@
 # DONE
 
+## 运行日志统一目录收口
+
+完成时间：2026-05-30
+
+本次将 search、convert、web 的运行日志统一收敛到 `data/logs/` 下，并按 workflow/功能划分子目录：
+
+- 新增 `LOG_PATH` 配置，默认值为 `DATA_PATH/logs`。
+- Search workflow trace 写入 `LOG_PATH/search/<run-id>/`。
+- Convert 目录批量 JSONL 日志写入 `LOG_PATH/convert/<run-id>.jsonl`。
+- Web 前后端日志写入 `LOG_PATH/web/`。
+- `/api/config/status` 现在返回 `log_path`、`search_log_path`、`convert_log_path` 与 `web_log_path`。
+- README、`.env.example` 与 `docs/SMOKE.md` 已同步新的日志路径。
+
 ## Web 工作台日志目录收口
 
 完成时间：2026-05-30
 
-本次将本地 Web 工作台日志统一收敛到 `data/web_log/`，避免 `data/` 根目录散落运行日志：
+本次将本地 Web 工作台日志从 `data/` 根目录收敛到独立子目录，避免根目录散落运行日志：
 
-- 新增 `WEB_LOG_PATH` 配置，默认值为 `DATA_PATH/web_log`。
-- 后端 FastAPI/Uvicorn 日志会写入 `WEB_LOG_PATH/web-backend.log`。
-- 前端新增 `npm run dev:log`，将 Vite stdout/stderr 写入 `WEB_LOG_PATH/web-frontend*.log`。
-- `/api/config/status` 现在返回 `web_log_path`，前端侧栏同步显示日志目录。
+- 新增 Web 日志配置，默认位于本地数据目录下的 Web 日志子目录。
+- 后端 FastAPI/Uvicorn 日志会写入 Web 后端日志文件。
+- 前端新增 `npm run dev:log`，将 Vite stdout/stderr 写入 Web 前端日志文件。
+- `/api/config/status` 返回 Web 日志目录，前端侧栏同步显示日志目录。
 - README、`.env.example` 与 `docs/SMOKE.md` 已同步新的日志路径和启动方式。
 
 ## v0.3 架构边界重构
@@ -33,7 +46,7 @@
 
 - 新增 `argupaper convert --folder <dir>` / `-d <dir>`，按目录直属 PDF 顺序执行现有 PDF 转 Markdown 缓存流程。
 - 保留 `--force/-f` 原有语义；目录模式会跳过非 PDF、子目录或不可读条目，并继续处理后续文件。
-- 每次目录转换会输出处理进度与汇总，并在 `data/convert_runs/<run-id>.jsonl` 记录可追踪执行日志。
+- 每次目录转换会输出处理进度与汇总，并在本地数据目录下写入可追踪 JSONL 执行日志。
 - README 与 `docs/SMOKE.md` 已同步批量转换命令和手工验收表单。
 
 ## Agent Prompt Markdown 集中化
@@ -56,7 +69,7 @@
 - 新增复用现有 `LLMRouter` 的 LangChain adapter，不新增 `langchain-openai`、OpenAI SDK 或新的环境变量。
 - `SupportAgent` 与 `SkepticAgent` 保持 `think(context) -> str` 接口不变，优先走 LangChain 角色链，LLM 不可用时降级到确定性规则输出。
 - `DebateChain` 保持原有轮次、顺序、early stop 和 `DebateState`/`AgentMessage` 输出结构，并把角色降级原因写入 warnings。
-- `AnalyzeWorkflow` 会合并 debate warnings，CLI/Web analyze 可以继续暴露降级原因；Search Agent 不受影响。
+- `AnalyzeWorkflow` 会合并 debate warnings，CLI/Web analyze 可以继续暴露降级原因；Search workflow 不受影响。
 - README 与 `docs/SMOKE.md` 已同步 LangChain debate 与 fallback 手工验收表单。
 
 ## Analyze 输入与 PDF 转换解耦
@@ -364,7 +377,7 @@ CLI 已具备 MVP 可用性：
 - 对“权威期刊”等模糊条件增加 CLI 二次确认，避免系统暗自猜测
 - 复用现有 Semantic Scholar / arXiv 检索链路做候选召回
 - 新增过滤层，对年份、发表源、数量等条件做结果筛选
-- 新增搜索 Agent trace 落盘，保存原始请求、解析结果、原始候选、过滤结果和最终结果
+- 新增搜索 workflow trace 落盘，保存原始请求、解析结果、原始候选、过滤结果和最终结果
 - 新增通用 OpenAI 兼容 LLM provider 配置，为后续其他 Agent 复用做准备
 - 新增 Prompt 独立目录，避免把 Agent Prompt 硬编码在 Python 中
 

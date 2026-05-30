@@ -77,7 +77,9 @@ class ConfigStatusResponse(BaseModel):
     serpapi_configured: bool
     paper_storage_path: str
     cache_path: str
-    search_agent_trace_path: str
+    log_path: str
+    search_log_path: str
+    convert_log_path: str
     web_log_path: str
     analyze_retrieval_loop_enabled: bool
 

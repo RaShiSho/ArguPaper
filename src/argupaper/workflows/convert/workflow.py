@@ -16,7 +16,6 @@ from argupaper.workflows.errors import InputValidationError
 
 ProgressCallback = Optional[Callable[[str], None]]
 FileEventCallback = Optional[Callable[[str], None]]
-CONVERT_RUN_LOG_DIRNAME = "convert_runs"
 
 
 class ConvertWorkflow:
@@ -196,7 +195,7 @@ class ConvertWorkflow:
 
     def _new_run_log_path(self) -> tuple[str, Path]:
         run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:8]}"
-        log_path = Path(self.config.data_path) / CONVERT_RUN_LOG_DIRNAME / f"{run_id}.jsonl"
+        log_path = Path(self.config.log.convert_path) / f"{run_id}.jsonl"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         return run_id, log_path
 

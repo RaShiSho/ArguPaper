@@ -149,8 +149,10 @@ async def get_config_status() -> ConfigStatusResponse:
         serpapi_configured=bool(config.retrieval.serpapi_api_key),
         paper_storage_path=config.paper_storage_path,
         cache_path=config.pdf.cache_dir,
-        search_agent_trace_path=config.search_agent.trace_path,
-        web_log_path=config.web.log_path,
+        log_path=config.log.root_path,
+        search_log_path=config.log.search_path,
+        convert_log_path=config.log.convert_path,
+        web_log_path=config.log.web_path,
         analyze_retrieval_loop_enabled=config.analyze_enable_retrieval_loop,
     )
 

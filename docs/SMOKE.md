@@ -72,7 +72,7 @@
 - 适用场景：验证 `convert --folder` 可批量处理目录直属 PDF，并跳过非 PDF 或子目录
 - 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；当前网络可访问 MinerU API 与其返回的签名上传 / 下载地址；准备一个目录，包含至少两个 PDF、一个非 PDF 文件和一个子目录
 - 执行命令：`uv run argupaper convert --folder ./papers`
-- 预期结果：命令显示逐文件处理进度；PDF 被转换或命中缓存；非 PDF 文件与子目录被跳过；最终汇总包含 total、processed、succeeded、cache、failed、skipped；`data/convert_runs/` 下生成对应 JSONL 日志
+- 预期结果：命令显示逐文件处理进度；PDF 被转换或命中缓存；非 PDF 文件与子目录被跳过；最终汇总包含 total、processed、succeeded、cache、failed、skipped；`data/logs/convert/` 下生成对应 JSONL 日志
 - 记录：____
 
 ### 7. 本地 Markdown 分析主链路
@@ -172,7 +172,7 @@ uv run uvicorn argupaper.web.app:app --port 8000
 Invoke-RestMethod http://127.0.0.1:8000/api/config/status
 ```
 
-- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path`、`web_log_path` 等字段；不返回任何 API key 明文；`data/web_log/web-backend.log` 存在并记录后端启动或请求日志
+- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path`、`log_path`、`search_log_path`、`convert_log_path`、`web_log_path` 等字段；不返回任何 API key 明文；`data/logs/web/web-backend.log` 存在并记录后端启动或请求日志
 - 记录：____
 
 ### 16. 本地 Web 工作台前端启动
@@ -187,13 +187,13 @@ cd frontend
 npm run dev:log
 ```
 
-- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Analyze、Library 三个工作台视图；侧栏配置状态可正常显示或显示可读错误；`data/web_log/web-frontend.log`、`data/web_log/web-frontend.out.log`、`data/web_log/web-frontend.err.log` 写入前端开发服务日志
+- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Analyze、Library 三个工作台视图；侧栏配置状态可正常显示或显示可读错误；`data/logs/web/web-frontend.log`、`data/logs/web/web-frontend.out.log`、`data/logs/web/web-frontend.err.log` 写入前端开发服务日志
 - 记录：____
 
 ### 17. Workbench Search 视图
 
 - 功能名称：Workbench 检索可视化
-- 适用场景：验证 React Search 页面复用现有 Search Agent workflow
+- 适用场景：验证 React Search 页面复用现有 Search workflow
 - 前置条件：后端与前端均已启动；网络可访问所选检索源
 - 执行步骤：
   1. 打开 Search 视图

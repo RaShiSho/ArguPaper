@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const frontendDir = resolve(scriptDir, "..");
 const repoRoot = resolve(frontendDir, "..");
-const logDir = resolve(process.env.WEB_LOG_PATH || join(repoRoot, "data", "web_log"));
+const logRoot = resolve(repoRoot, process.env.LOG_PATH || join("data", "logs"));
+const logDir = join(logRoot, "web");
 
 mkdirSync(logDir, { recursive: true });
 

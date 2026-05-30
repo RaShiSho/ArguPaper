@@ -41,7 +41,7 @@ export function SearchPage(): JSX.Element {
       <div className="toolbar">
         <div>
           <h1>Paper Search</h1>
-          <p>Search Agent results from the existing retrieval workflow.</p>
+          <p>Search workflow results from the existing retrieval workflow.</p>
         </div>
       </div>
 

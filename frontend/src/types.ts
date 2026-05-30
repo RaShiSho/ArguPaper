@@ -100,7 +100,9 @@ export interface ConfigStatusResponse {
   serpapi_configured: boolean;
   paper_storage_path: string;
   cache_path: string;
-  search_agent_trace_path: string;
+  log_path: string;
+  search_log_path: string;
+  convert_log_path: string;
   web_log_path: string;
   analyze_retrieval_loop_enabled: boolean;
 }

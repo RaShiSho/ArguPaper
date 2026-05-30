@@ -53,7 +53,7 @@ NGROK_URL_BASE=https://your-ngrok-url.ngrok-free.dev
 DATA_PATH=./data
 CACHE_PATH=./data/cache
 PAPER_STORAGE_PATH=./data/papers
-WEB_LOG_PATH=./data/web_log
+LOG_PATH=./data/logs
 ```
 
 说明：
@@ -62,7 +62,7 @@ WEB_LOG_PATH=./data/web_log
 - `MINERU_API_ENDPOINT`：建议使用 MinerU 官方精准解析 API：`https://mineru.net/api/v4/extract/task`。
 - `NGROK_URL_BASE`：仅在使用非标准 URL 解析 endpoint 时需要；默认官方 endpoint 会走本地文件签名上传链路，不依赖 ngrok。
 - `PAPER_STORAGE_PATH`：本地论文记录保存目录；未配置时默认为 `DATA_PATH/papers`。
-- `WEB_LOG_PATH`：本地 Web 工作台日志目录；未配置时默认为 `DATA_PATH/web_log`。
+- `LOG_PATH`：运行日志根目录；未配置时默认为 `DATA_PATH/logs`，内部按 `search`、`convert`、`web` 区分。
 
 ### `search` 可选配置
 
@@ -77,8 +77,7 @@ SERPAPI_API_KEY=your_serpapi_key_here
 ### 常用可选项
 
 ```env
-SEARCH_AGENT_TRACE_PATH=./data/agent_runs/search
-SEARCH_AGENT_MAX_CANDIDATES=50
+SEARCH_WORKFLOW_MAX_CANDIDATES=50
 DEBATE_MAX_ROUNDS=3
 SEARCH_DEFAULT_LIMIT=10
 SEARCH_MAX_RESULTS=20
@@ -89,7 +88,7 @@ ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 
 `argupaper analyze` 的 Support/Skeptic debate 已使用 LangChain `ChatPromptTemplate` + LCEL Runnable 编排，LLM 接入仍复用现有 `LLM_PROVIDER__DEFAULT__*` 配置，不需要新增 `langchain-openai` 或 OpenAI SDK。
 
-如果默认 LLM provider 未配置、请求失败或返回空内容，debate 会自动降级到确定性规则输出，并在 analyze warnings 中说明降级原因；Search Agent 不受此变更影响。
+如果默认 LLM provider 未配置、请求失败或返回空内容，debate 会自动降级到确定性规则输出，并在 analyze warnings 中说明降级原因；Search workflow 不受此变更影响。
 
 ## 启动
 
@@ -101,7 +100,7 @@ ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 uv run uvicorn argupaper.web.app:app --reload --port 8000
 ```
 
-后端文件日志会写入 `WEB_LOG_PATH/web-backend.log`，默认路径为 `data/web_log/web-backend.log`。
+后端文件日志会写入 `LOG_PATH/web/web-backend.log`，默认路径为 `data/logs/web/web-backend.log`。
 
 前端开发服务：
 
@@ -111,13 +110,13 @@ npm install
 npm run dev:log
 ```
 
-前端开发服务的 stdout/stderr 会写入 `WEB_LOG_PATH/web-frontend.log`、`WEB_LOG_PATH/web-frontend.out.log` 与 `WEB_LOG_PATH/web-frontend.err.log`。
+前端开发服务的 stdout/stderr 会写入 `LOG_PATH/web/web-frontend.log`、`LOG_PATH/web/web-frontend.out.log` 与 `LOG_PATH/web/web-frontend.err.log`。
 
 打开 `http://127.0.0.1:5173`。Vite 已将 `/api` 代理到 `http://127.0.0.1:8000`。
 
 工作台当前包含：
 
-- Search：调用现有 Search Agent / Retrieval workflow，展示结果、warning 与 trace。
+- Search：调用现有 Search / Retrieval workflow，展示结果、warning 与 trace。
 - Analyze：上传本地 PDF，创建后台分析任务，并轮询展示进度、warning 与 Markdown 报告。
 - Library：读取 `PAPER_STORAGE_PATH` 下的本地 PaperStore 历史记录，展示结构化摘要、报告和论文 Markdown。
 
@@ -161,7 +160,7 @@ uv run argupaper convert -d ./papers --force
 - `--folder/-d` 只扫描目录直属条目，不递归进入子目录。
 - 目录模式会跳过非 PDF 文件、子目录或不可读条目，并继续处理后续 PDF。
 - 目录模式不支持 `--output`；转换结果默认写入现有 `data/cache` Markdown 缓存。
-- 每次目录转换会在 `data/convert_runs/<run-id>.jsonl` 写入执行日志，记录成功、缓存命中、失败、跳过和最终汇总。
+- 每次目录转换会在 `data/logs/convert/<run-id>.jsonl` 写入执行日志，记录成功、缓存命中、失败、跳过和最终汇总。
 
 基于已转换 Markdown 分析论文：
 

@@ -78,7 +78,7 @@ class SearchFilters(BaseModel):
 
 
 class SearchParseResult(BaseModel):
-    """Structured parse output for the search agent."""
+    """Structured parse output for the search workflow."""
 
     raw_request: str
     filters: SearchFilters = Field(default_factory=SearchFilters)

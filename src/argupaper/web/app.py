@@ -16,7 +16,7 @@ def create_app() -> FastAPI:
     """Create the ArguPaper local workbench API app."""
 
     config = load_config(require_pdf_api_key=False)
-    log_file = configure_web_logging(config.web.log_path)
+    log_file = configure_web_logging(config.log.web_path)
     logger.info("Local workbench API logging to %s", log_file)
 
     app = FastAPI(
@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
-    app.state.web_log_path = config.web.log_path
+    app.state.web_log_path = config.log.web_path
     return app
 
 

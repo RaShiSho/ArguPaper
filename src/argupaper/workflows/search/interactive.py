@@ -30,7 +30,7 @@ class InteractiveSearchWorkflow:
         self.runner = SearchRequestRunner(
             config=config,
             parser=SearchRequestParser(config, llm_router=self.llm_router),
-            trace_store=SearchTraceStore(config.search_agent.trace_path),
+            trace_store=SearchTraceStore(config.log.search_path),
         )
 
     async def run(

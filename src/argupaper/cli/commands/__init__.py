@@ -14,14 +14,11 @@ from argupaper.cli.commands.convert import convert
 from argupaper.cli.commands.papers import papers
 from argupaper.cli.commands.search import search
 
-build_search_agent_workflow = build_search_workflow
-
 __all__ = [
     "analyze",
     "build_analyze_workflow",
     "build_convert_pipeline",
     "build_paper_store",
-    "build_search_agent_workflow",
     "build_search_workflow",
     "convert",
     "papers",
