@@ -1,4 +1,4 @@
-# SMOKE
+﻿# SMOKE
 
 本文件是项目唯一的手工 smoke 验收入口。
 
@@ -56,7 +56,7 @@
 - 功能名称：Agent Markdown Prompt 加载
 - 适用场景：验证 agent 提示词统一从 `src/argupaper/prompts/` 下的 `.md` 文件读取
 - 前置条件：已执行 `uv sync`
-- 执行命令：`uv run python -c "from argupaper.agents.support import SUPPORT_SYSTEM_PROMPT; from argupaper.agents.skeptic import SKEPTIC_SYSTEM_PROMPT; from argupaper.agents.search import SearchRequestParser; from argupaper.config import load_config; parser = SearchRequestParser(load_config(require_pdf_api_key=False)); assert 'Support role' in SUPPORT_SYSTEM_PROMPT; assert 'Skeptic role' in SKEPTIC_SYSTEM_PROMPT; assert 'Current local date' in parser.system_prompt; print('prompt loading ok')"`
+- 执行命令：`uv run python -c "from argupaper.agents.roles.support import SUPPORT_SYSTEM_PROMPT; from argupaper.agents.roles.skeptic import SKEPTIC_SYSTEM_PROMPT; from argupaper.workflows.search.parser import SearchRequestParser; from argupaper.config import load_config; parser = SearchRequestParser(load_config(require_pdf_api_key=False)); assert 'Support role' in SUPPORT_SYSTEM_PROMPT; assert 'Skeptic role' in SKEPTIC_SYSTEM_PROMPT; assert 'Current local date' in parser.system_prompt; print('prompt loading ok')"`
 - 预期结果：命令输出 `prompt loading ok`，不出现 prompt 文件缺失、导入失败或 UTF-8 读取错误
 - 记录：____
 
@@ -133,7 +133,7 @@
 ```powershell
 @'
 import asyncio
-from argupaper.chains.evidence import EvidenceChain
+from argupaper.pipelines.evidence_pipeline import EvidenceChain
 
 markdown = """# Demo Paper
 
@@ -168,7 +168,7 @@ asyncio.run(main())
 ```powershell
 @'
 import asyncio
-from argupaper.extraction.claim_checker import ClaimChecker
+from argupaper.domain.claims.checker import ClaimChecker
 
 claims = [{"claim": "The proposed method improves retrieval accuracy."}]
 evidence = [
@@ -266,8 +266,8 @@ Remove-Item Env:ANALYZE_ENABLE_RETRIEVAL_LOOP
 ```powershell
 @'
 import asyncio
-from argupaper.agents.base import AgentBase, AgentConfig
-from argupaper.chains.debate import DebateChain
+from argupaper.agents.runtime.base import AgentBase, AgentConfig
+from argupaper.pipelines.debate_pipeline import DebateChain
 
 class EmptySupport(AgentBase):
     async def think(self, context):
@@ -308,7 +308,7 @@ import tempfile
 from pathlib import Path
 
 from argupaper.config import Config, PDFConfig
-from argupaper.pdf.types import ConversionResult, TaskStatus
+from argupaper.services.pdf.types import ConversionResult, TaskStatus
 from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow
 
 class EmptyPipeline:
@@ -452,7 +452,7 @@ npm run dev -- --host 127.0.0.1 --port 5173
 ```powershell
 @'
 import asyncio
-from argupaper.chains.debate import DebateChain
+from argupaper.pipelines.debate_pipeline import DebateChain
 
 class FakeClient:
     async def chat(self, *, system_prompt, user_prompt, temperature, max_tokens):
@@ -495,7 +495,7 @@ asyncio.run(main())
 ```powershell
 @'
 import asyncio
-from argupaper.chains.debate import DebateChain
+from argupaper.pipelines.debate_pipeline import DebateChain
 
 class MissingRouter:
     def has_provider(self, alias):
@@ -514,4 +514,24 @@ asyncio.run(main())
 ```
 
 - 预期结果：第一行输出 `2`；第二、三行输出 `True`；warnings 中包含 `Support LangChain role skipped` 与 `Skeptic LangChain role skipped`
+- 记录：____
+
+### 19. v0.3 架构边界重构
+
+- 功能名称：v0.3 架构边界重构
+- 适用场景：验证 `app/services/domain/pipelines/tools/workflows/agents` 新结构可导入，旧路径兼容层仍可用，CLI/Web 外部入口未破坏
+- 前置条件：已执行 `uv sync`
+- 执行命令：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper --help
+uv run argupaper convert --help
+uv run argupaper analyze --help
+uv run argupaper search --help
+uv run argupaper papers --help
+uv run python -c "import argupaper.services.pdf, argupaper.services.retrieval, argupaper.services.reporting, argupaper.services.llm; import argupaper.workflows.analyze.workflow, argupaper.workflows.search.workflow, argupaper.workflows.convert.workflow, argupaper.workflows.papers.workflow; import argupaper.tools, argupaper.domain, argupaper.pipelines; from argupaper.web.app import app; print(app.title)"
+```
+
+- 预期结果：compileall 成功；所有 CLI help 命令正常显示；新架构路径均可导入；最后一条命令输出 `ArguPaper Local Workbench API`
 - 记录：____

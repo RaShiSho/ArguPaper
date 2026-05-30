@@ -1,4 +1,4 @@
-"""FastAPI routes for the local ArguPaper workbench."""
+﻿"""FastAPI routes for the local ArguPaper workbench."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from argupaper.workflows import (
     InputValidationError,
     SearchOptions,
 )
-from argupaper.workflows.search_agent import SearchAgentWorkflow
+from argupaper.workflows.search import InteractiveSearchWorkflow
 
 router = APIRouter(prefix="/api", tags=["workbench"])
 job_registry = AnalyzeJobRegistry()
@@ -36,7 +36,7 @@ job_registry = AnalyzeJobRegistry()
 
 @router.post("/search", response_model=SearchResponse)
 async def search_papers(request: SearchRequest) -> SearchResponse:
-    """Run the existing search-agent workflow and return JSON."""
+    """Run the existing search workflow and return JSON."""
 
     query = request.query.strip()
     if not query:
@@ -44,7 +44,7 @@ async def search_papers(request: SearchRequest) -> SearchResponse:
 
     try:
         config = load_config(require_pdf_api_key=False)
-        workflow = SearchAgentWorkflow(config)
+        workflow = InteractiveSearchWorkflow(config)
         result = await workflow.run(
             SearchOptions(
                 query=query,

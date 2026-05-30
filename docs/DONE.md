@@ -1,5 +1,18 @@
 # DONE
 
+## v0.3 架构边界重构
+
+完成时间：2026-05-29
+
+本次基于 OpenSpec change `align-v03-architecture` 将项目结构对齐到 v0.3 的 workflow / agent / tool / pipeline / service / domain 分层：
+
+- 新增 `app/`、`services/`、`domain/`、`pipelines/`、`tools/` 等架构包，并将 PDF、retrieval、LLM、reporting 等底层能力迁移到 `services/`。
+- 将 analyze/search/convert/papers 固定任务流整理到 `workflows/` 子包，CLI/Web 继续复用 workflow。
+- 将 Support/Skeptic/Comparator/Evidence 迁移到 `agents/roles/`，搜索解析与 trace 移入 `workflows/search/`，避免把 Parser/Workflow 命名为 Agent。
+- 后续清理已移除旧的扁平服务、领域、pipeline 与 workflow shim 路径，统一使用新架构 import。
+- CLI 已拆分为 `cli/main.py`、`cli/commands/` 与 `cli/formatters/`，并保持 `argupaper.cli:main` 入口可用。
+- `docs/SMOKE.md` 已新增 v0.3 架构边界重构验收表单。
+
 ## Convert 目录批量转换
 
 完成时间：2026-05-24

@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-ArguPaper 是一个多智能体科研认知系统，实现论文检索 → 理解 → 证据分析 → 对抗性批判 → 共识生成的全流程。
+ArguPaper 是一个面向个人科研阅读的 Paper Memory & Related Work Agent。
 
 ## 常用命令
 
@@ -22,15 +22,22 @@ uv run argupaper --help
 
 ```
 src/argupaper/
-├── agents/        # Agent定义（Support, Skeptic, Comparator, Evidence）
-├── chains/        # LangChain Chain（Analysis, Evidence, Critique, Debate）
-├── retrieval/     # 检索模块（Semantic Scholar, ArXiv）
-├── memory/        # 记忆库（PaperStore, ConversationMemory）
-├── pdf/           # PDF处理（MinerUClient, MarkdownCache, Pipeline）
-├── extraction/    # 内容提取（结构化提取, Claim对齐检查）
-├── judge/         # 裁决层（共识检测）
-└── output/        # 输出报告生成
-docs/              # 文档
+├── app/           # 全局配置、依赖构造、异常导出
+├── cli/           # Typer CLI 入口、命令模块、Rich/Markdown 输出格式化
+├── web/           # FastAPI 本地 Web 工作台入口与 API 路由
+├── agents/        # 真正 Agent 与多 Agent 讨论角色（roles/runtime/supervisor）
+├── tools/         # 未来 Agent 可调用的工具注册与结构化包装层
+├── workflows/     # 固定任务流（analyze/search/convert/papers）
+├── pipelines/     # workflow 内部复用阶段（analysis/evidence/debate/report）
+├── domain/        # 论文、claim、evidence、related work、verdict 领域逻辑
+├── services/      # 底层服务能力（PDF、retrieval、LLM、reporting）
+├── memory/        # 记忆库与持久化（PaperStore, ConversationMemory）
+└── prompts/       # Prompt 模板与加载器
+
+data/              # 本地运行数据、缓存、转换记录、论文记忆库等持久化数据
+docs/              # 项目文档、已完成记录与手工 smoke 验收说明
+frontend/          # 本地 Web 工作台前端工程与构建产物
+output/            # 报告输出目录；所有 reports 默认输出到此处
 ```
 
 ## 编码规范

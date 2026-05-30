@@ -1,9 +1,10 @@
-"""Workflow entrypoints used by the CLI."""
+﻿"""Workflow entrypoints used by CLI, Web, and future tools."""
 
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from argupaper.workflows.analyze_paper import AnalyzeWorkflow
+    from argupaper.workflows.analyze import AnalyzeWorkflow
+    from argupaper.workflows.convert import ConvertOptions, ConvertWorkflow, ConvertWorkflowResult, FolderConvertSummary
     from argupaper.workflows.errors import (
         ConfigurationError,
         ExternalServiceError,
@@ -22,15 +23,24 @@ if TYPE_CHECKING:
         SearchResult,
         SearchWorkflowResult,
     )
-    from argupaper.workflows.search_papers import SearchWorkflow
+    from argupaper.workflows.papers import PapersOptions, PapersWorkflow, PapersWorkflowResult
+    from argupaper.workflows.search import InteractiveSearchWorkflow, SearchWorkflow
 
 __all__ = [
     "AnalyzeOptions",
     "AnalyzeWorkflow",
     "AnalyzeWorkflowResult",
     "ConfigurationError",
+    "ConvertOptions",
+    "ConvertWorkflow",
+    "ConvertWorkflowResult",
     "ExternalServiceError",
+    "FolderConvertSummary",
     "InputValidationError",
+    "InteractiveSearchWorkflow",
+    "PapersOptions",
+    "PapersWorkflow",
+    "PapersWorkflowResult",
     "SearchAgentResult",
     "SearchClarification",
     "SearchFilters",
@@ -48,13 +58,21 @@ def __getattr__(name: str) -> Any:
     """Resolve workflow exports lazily to avoid package import cycles."""
 
     if name == "AnalyzeWorkflow":
-        from argupaper.workflows.analyze_paper import AnalyzeWorkflow
+        from argupaper.workflows.analyze import AnalyzeWorkflow
 
         return AnalyzeWorkflow
-    if name == "SearchWorkflow":
-        from argupaper.workflows.search_papers import SearchWorkflow
+    if name in {"ConvertOptions", "ConvertWorkflow", "ConvertWorkflowResult", "FolderConvertSummary"}:
+        from argupaper.workflows import convert
 
-        return SearchWorkflow
+        return getattr(convert, name)
+    if name in {"PapersOptions", "PapersWorkflow", "PapersWorkflowResult"}:
+        from argupaper.workflows import papers
+
+        return getattr(papers, name)
+    if name in {"InteractiveSearchWorkflow", "SearchWorkflow"}:
+        from argupaper.workflows import search
+
+        return getattr(search, name)
     if name in {
         "ConfigurationError",
         "ExternalServiceError",
