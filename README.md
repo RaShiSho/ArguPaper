@@ -53,6 +53,7 @@ NGROK_URL_BASE=https://your-ngrok-url.ngrok-free.dev
 DATA_PATH=./data
 CACHE_PATH=./data/cache
 PAPER_STORAGE_PATH=./data/papers
+WEB_LOG_PATH=./data/web_log
 ```
 
 说明：
@@ -61,6 +62,7 @@ PAPER_STORAGE_PATH=./data/papers
 - `MINERU_API_ENDPOINT`：建议使用 MinerU 官方精准解析 API：`https://mineru.net/api/v4/extract/task`。
 - `NGROK_URL_BASE`：仅在使用非标准 URL 解析 endpoint 时需要；默认官方 endpoint 会走本地文件签名上传链路，不依赖 ngrok。
 - `PAPER_STORAGE_PATH`：本地论文记录保存目录；未配置时默认为 `DATA_PATH/papers`。
+- `WEB_LOG_PATH`：本地 Web 工作台日志目录；未配置时默认为 `DATA_PATH/web_log`。
 
 ### `search` 可选配置
 
@@ -99,13 +101,17 @@ ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 uv run uvicorn argupaper.web.app:app --reload --port 8000
 ```
 
+后端文件日志会写入 `WEB_LOG_PATH/web-backend.log`，默认路径为 `data/web_log/web-backend.log`。
+
 前端开发服务：
 
 ```bash
 cd frontend
 npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev:log
 ```
+
+前端开发服务的 stdout/stderr 会写入 `WEB_LOG_PATH/web-frontend.log`、`WEB_LOG_PATH/web-frontend.out.log` 与 `WEB_LOG_PATH/web-frontend.err.log`。
 
 打开 `http://127.0.0.1:5173`。Vite 已将 `/api` 代理到 `http://127.0.0.1:8000`。
 

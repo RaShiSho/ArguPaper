@@ -1,13 +1,23 @@
 """FastAPI application factory for the local web workbench."""
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from argupaper.config import load_config
+from argupaper.web.logging import configure_web_logging
 from argupaper.web.routes import router
+
+logger = logging.getLogger("argupaper.web")
 
 
 def create_app() -> FastAPI:
     """Create the ArguPaper local workbench API app."""
+
+    config = load_config(require_pdf_api_key=False)
+    log_file = configure_web_logging(config.web.log_path)
+    logger.info("Local workbench API logging to %s", log_file)
 
     app = FastAPI(
         title="ArguPaper Local Workbench API",
@@ -25,6 +35,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.state.web_log_path = config.web.log_path
     return app
 
 

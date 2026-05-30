@@ -64,6 +64,12 @@ class DebateConfig(BaseModel):
     max_rounds: int = 3
 
 
+class WebConfig(BaseModel):
+    """Local web workbench configuration."""
+
+    log_path: str = "./data/web_log"
+
+
 class Config(BaseModel):
     """Main configuration for ArguPaper."""
 
@@ -72,6 +78,7 @@ class Config(BaseModel):
     model: ModelConfig = ModelConfig()
     search_agent: SearchAgentConfig = SearchAgentConfig()
     debate: DebateConfig = DebateConfig()
+    web: WebConfig = WebConfig()
     data_path: str = "./data"
     paper_storage_path: str = "./data/papers"
     analyze_enable_retrieval_loop: bool = True
@@ -125,11 +132,13 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
     data_path = os.getenv("DATA_PATH", "./data")
     paper_storage_path = os.getenv("PAPER_STORAGE_PATH", str(Path(data_path) / "papers"))
     search_agent_trace_path = os.getenv("SEARCH_AGENT_TRACE_PATH", "./data/agent_runs/search")
+    web_log_path = os.getenv("WEB_LOG_PATH", str(Path(data_path) / "web_log"))
 
     Path(pdf_cache_dir).mkdir(parents=True, exist_ok=True)
     Path(data_path).mkdir(parents=True, exist_ok=True)
     Path(paper_storage_path).mkdir(parents=True, exist_ok=True)
     Path(search_agent_trace_path).mkdir(parents=True, exist_ok=True)
+    Path(web_log_path).mkdir(parents=True, exist_ok=True)
 
     return Config(
         pdf=PDFConfig(
@@ -159,6 +168,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
         debate=DebateConfig(
             max_rounds=int(os.getenv("DEBATE_MAX_ROUNDS", "3")),
         ),
+        web=WebConfig(log_path=web_log_path),
         data_path=data_path,
         paper_storage_path=paper_storage_path,
         analyze_enable_retrieval_loop=(

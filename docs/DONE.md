@@ -1,5 +1,17 @@
 # DONE
 
+## Web 工作台日志目录收口
+
+完成时间：2026-05-30
+
+本次将本地 Web 工作台日志统一收敛到 `data/web_log/`，避免 `data/` 根目录散落运行日志：
+
+- 新增 `WEB_LOG_PATH` 配置，默认值为 `DATA_PATH/web_log`。
+- 后端 FastAPI/Uvicorn 日志会写入 `WEB_LOG_PATH/web-backend.log`。
+- 前端新增 `npm run dev:log`，将 Vite stdout/stderr 写入 `WEB_LOG_PATH/web-frontend*.log`。
+- `/api/config/status` 现在返回 `web_log_path`，前端侧栏同步显示日志目录。
+- README、`.env.example` 与 `docs/SMOKE.md` 已同步新的日志路径和启动方式。
+
 ## v0.3 架构边界重构
 
 完成时间：2026-05-29

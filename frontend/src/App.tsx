@@ -90,6 +90,10 @@ export function App(): JSX.Element {
                 <dt>Retrieval loop</dt>
                 <dd>{config.analyze_retrieval_loop_enabled ? "on" : "off"}</dd>
               </div>
+              <div>
+                <dt>Web logs</dt>
+                <dd>{config.web_log_path}</dd>
+              </div>
             </dl>
           )}
         </div>

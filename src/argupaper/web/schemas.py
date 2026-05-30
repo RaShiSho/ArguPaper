@@ -78,6 +78,7 @@ class ConfigStatusResponse(BaseModel):
     paper_storage_path: str
     cache_path: str
     search_agent_trace_path: str
+    web_log_path: str
     analyze_retrieval_loop_enabled: bool
 
 

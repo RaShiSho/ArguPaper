@@ -172,7 +172,7 @@ uv run uvicorn argupaper.web.app:app --port 8000
 Invoke-RestMethod http://127.0.0.1:8000/api/config/status
 ```
 
-- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path` 等字段；不返回任何 API key 明文
+- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path`、`web_log_path` 等字段；不返回任何 API key 明文；`data/web_log/web-backend.log` 存在并记录后端启动或请求日志
 - 记录：____
 
 ### 16. 本地 Web 工作台前端启动
@@ -184,10 +184,10 @@ Invoke-RestMethod http://127.0.0.1:8000/api/config/status
 
 ```powershell
 cd frontend
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev:log
 ```
 
-- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Analyze、Library 三个工作台视图；侧栏配置状态可正常显示或显示可读错误
+- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Analyze、Library 三个工作台视图；侧栏配置状态可正常显示或显示可读错误；`data/web_log/web-frontend.log`、`data/web_log/web-frontend.out.log`、`data/web_log/web-frontend.err.log` 写入前端开发服务日志
 - 记录：____
 
 ### 17. Workbench Search 视图

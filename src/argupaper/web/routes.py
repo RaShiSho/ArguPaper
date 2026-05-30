@@ -150,6 +150,7 @@ async def get_config_status() -> ConfigStatusResponse:
         paper_storage_path=config.paper_storage_path,
         cache_path=config.pdf.cache_dir,
         search_agent_trace_path=config.search_agent.trace_path,
+        web_log_path=config.web.log_path,
         analyze_retrieval_loop_enabled=config.analyze_enable_retrieval_loop,
     )
 

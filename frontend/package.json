@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:log": "node scripts/dev-with-log.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
