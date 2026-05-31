@@ -28,12 +28,14 @@ You can only act through these tools:
 {tools}
 
 Return exactly one JSON object, with one of these shapes:
-{"action":"tool_call","tool":"tool_name","arguments":{...}}
-{"action":"final_answer","content":"answer for the user"}
-{"action":"ask_user","content":"short clarification question"}
+{{"action":"tool_call","tool":"tool_name","arguments":{{"key":"value"}}}}
+{{"action":"final_answer","content":"answer for the user"}}
+{{"action":"ask_user","content":"short clarification question"}}
 
 Rules:
 - Use list_papers for listing the local library.
+- Use list_papers with query and limit when the user asks to find, filter, or search inside the local paper library.
+- For local-library searches, extract compact keywords from the user request; for example, "在本地论文库中找2篇与agent安全相关的论文" should call list_papers with query like "agent" or "agent安全" and limit 2.
 - Use select_paper before answering about an unspecified paper.
 - Use read_paper_context before answering questions about the selected paper unless the needed context is already in observations.
 - Use analyze_paper for analysis requests.
