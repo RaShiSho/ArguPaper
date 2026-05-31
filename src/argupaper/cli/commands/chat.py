@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 
 import typer
 from prompt_toolkit import PromptSession
-from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.input.defaults import create_input
+from prompt_toolkit.keys import Keys
 from rich.markdown import Markdown
 from rich.panel import Panel
 
@@ -23,6 +25,8 @@ def chat() -> None:
 
     try:
         asyncio.run(_run_chat())
+    except KeyboardInterrupt:
+        console.print("[dim]Bye.[/dim]")
     except Exception as exc:
         console.print(format_error(exc))
         raise typer.Exit(code=1)
@@ -49,7 +53,12 @@ async def _run_chat() -> None:
     try:
         while True:
             try:
-                user_input = (await prompt_session.prompt_async("argupaper> ")).strip()
+                user_input = (
+                    await prompt_session.prompt_async(
+                        "argupaper> ",
+                        set_exception_handler=False,
+                    )
+                ).strip()
             except (EOFError, KeyboardInterrupt):
                 console.print("[dim]Bye.[/dim]")
                 return
@@ -68,11 +77,12 @@ async def _run_chat() -> None:
 async def _run_turn_with_interrupt(runtime: ChatAgentRuntime, user_input: str) -> ChatTurnResult:
     task = asyncio.create_task(runtime.run_turn(user_input))
     esc_task = asyncio.create_task(_wait_for_escape())
+    console.print("[dim]Running agent task. Press Esc to interrupt; other input is ignored.[/dim]")
     try:
         while True:
             done, _ = await asyncio.wait({task, esc_task}, return_when=asyncio.FIRST_COMPLETED)
             if task in done:
-                esc_task.cancel()
+                await _cancel_task(esc_task)
                 return await task
             if esc_task in done:
                 value = await esc_task
@@ -80,25 +90,31 @@ async def _run_turn_with_interrupt(runtime: ChatAgentRuntime, user_input: str) -
                     console.print(format_warning("Interrupt requested. Cancelling current agent run..."))
                     task.cancel()
                     return await task
-                console.print("[dim]Agent is running; queued input is ignored. Press Esc to interrupt.[/dim]")
-                esc_task = asyncio.create_task(_wait_for_escape())
     finally:
         if not esc_task.done():
-            esc_task.cancel()
+            await _cancel_task(esc_task)
 
 
 async def _wait_for_escape() -> str:
-    bindings = KeyBindings()
+    """Wait for Escape without starting a second prompt application."""
 
-    @bindings.add("escape")
-    def _handle_escape(event) -> None:  # type: ignore[no-untyped-def]
-        event.app.exit(result=ESC_RESULT)
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future[str] = loop.create_future()
+    prompt_input = create_input()
 
-    running_session: PromptSession[str] = PromptSession(key_bindings=bindings)
-    try:
-        return await running_session.prompt_async("[running: Esc to interrupt] ")
-    except (EOFError, KeyboardInterrupt):
-        return ESC_RESULT
+    def input_ready() -> None:
+        for key_press in prompt_input.read_keys():
+            if key_press.key == Keys.Escape and not future.done():
+                loop.call_soon_threadsafe(future.set_result, ESC_RESULT)
+
+    with prompt_input.raw_mode(), prompt_input.attach(input_ready):
+        return await future
+
+
+async def _cancel_task(task: asyncio.Task[object]) -> None:
+    task.cancel()
+    with suppress(BaseException):
+        await task
 
 
 def _render_turn_result(result: ChatTurnResult) -> None:
