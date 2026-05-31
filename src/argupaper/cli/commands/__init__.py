@@ -27,3 +27,12 @@ __all__ = [
     "resolve_convert_output_path",
     "search",
 ]
+"""CLI command exports."""
+
+from argupaper.cli.commands.analyze import analyze
+from argupaper.cli.commands.chat import chat
+from argupaper.cli.commands.convert import convert
+from argupaper.cli.commands.papers import papers
+from argupaper.cli.commands.search import search
+
+__all__ = ["analyze", "chat", "convert", "papers", "search"]

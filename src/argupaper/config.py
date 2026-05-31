@@ -70,6 +70,7 @@ class LogConfig(BaseModel):
     search_path: str = "./data/logs/search"
     convert_path: str = "./data/logs/convert"
     web_path: str = "./data/logs/web"
+    chat_path: str = "./data/logs/chat"
 
 
 class Config(BaseModel):
@@ -137,6 +138,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
     search_log_path = str(Path(log_root_path) / "search")
     convert_log_path = str(Path(log_root_path) / "convert")
     web_log_path = str(Path(log_root_path) / "web")
+    chat_log_path = os.getenv("CHAT_LOG_PATH", str(Path(log_root_path) / "chat"))
 
     Path(pdf_cache_dir).mkdir(parents=True, exist_ok=True)
     Path(data_path).mkdir(parents=True, exist_ok=True)
@@ -145,6 +147,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
     Path(search_log_path).mkdir(parents=True, exist_ok=True)
     Path(convert_log_path).mkdir(parents=True, exist_ok=True)
     Path(web_log_path).mkdir(parents=True, exist_ok=True)
+    Path(chat_log_path).mkdir(parents=True, exist_ok=True)
 
     return Config(
         pdf=PDFConfig(
@@ -178,6 +181,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
             search_path=search_log_path,
             convert_path=convert_log_path,
             web_path=web_log_path,
+            chat_path=chat_log_path,
         ),
         data_path=data_path,
         paper_storage_path=paper_storage_path,

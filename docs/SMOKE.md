@@ -276,3 +276,47 @@ uv run argupaper papers
 - 预期结果：首次 convert 后 `argupaper papers` 出现同一 cache key 的记录，Status 为 `converted`；`--markdown` 可显示保存的 Markdown；第二次 convert 使用 cache 时记录仍存在；analyze 后同一记录 Status 升级为 `analyzed`，并包含结构化摘要和报告
 - Web 验收：启动后端和前端，打开 Library 视图，确认列表和详情都显示 converted/analyzed 状态，converted 记录可查看 Paper Markdown
 - 记录：____
+
+### 23. CLI Chat LangGraph Agent Runtime
+
+- 功能名称：`argupaper chat` 会话型 Agent Runtime
+- 适用场景：验证 chat 入口由 LangGraph Agent State Graph 驱动，并通过 tools 调用现有 workflows
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在至少一条记录；如需自然语言 Agent 能力，已配置 `LLM_PROVIDER__DEFAULT__*`
+- 执行命令或步骤：
+
+```powershell
+uv run argupaper chat
+/papers
+/use <paper_id_or_title>
+/analyze
+/exit
+```
+
+- 预期结果：chat 面板启动成功；`/papers` 列出 PaperStore 记录；`/use` 更新 selected paper；`/analyze` 调用现有 AnalyzeWorkflow 并显示阶段动作；`/exit` 正常退出；`data/logs/chat/` 下生成 JSONL 日志
+- 记录：____
+
+### 24. Chat 自然语言与降级
+
+- 功能名称：Chat Planner + ReAct Tool Loop 与 LLM 降级
+- 适用场景：验证自然语言请求经 LangGraph Planner/ReAct 调用 tools，且 LLM 不可用时 slash commands 仍可用
+- 前置条件：已执行 `uv sync`；自然语言场景需配置 `LLM_PROVIDER__DEFAULT__*`
+- 执行步骤：
+  1. 运行 `uv run argupaper chat`
+  2. 输入“找 5 篇 RAG 论文”
+  3. 输入 `/use <paper_id_or_title>`
+  4. 输入“这篇论文的主要贡献是什么”
+  5. 取消 LLM provider 配置后重新启动 chat，输入自然语言与 `/papers`
+- 预期结果：自然语言搜索会调用 `search_papers` tool；当前论文问答会调用 `read_paper_context` tool；LLM 不可用时自然语言给出降级提示，`/papers` 等 slash commands 仍可执行
+- 记录：____
+
+### 25. Chat ESC 中断
+
+- 功能名称：Chat 任务最佳努力中断
+- 适用场景：验证长任务运行期间不接受下一条用户请求，但支持 ESC 取消当前任务
+- 前置条件：已配置可运行的 analyze 场景，并已在 chat 中 `/use` 一篇论文
+- 执行步骤：
+  1. 运行 `uv run argupaper chat`
+  2. 输入 `/analyze`
+  3. 任务运行时按 Esc
+- 预期结果：当前任务被请求取消，界面回到输入状态；`data/logs/chat/` 对应 JSONL 日志包含 interrupted 事件；不会保存可恢复对话
+- 记录：____

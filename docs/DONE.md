@@ -1,5 +1,17 @@
 # DONE
 
+## LangGraph Chat Agent Runtime
+
+完成时间：2026-05-31
+
+本次基于 OpenSpec change `add-langgraph-chat-agent-runtime` 新增 `argupaper chat` 会话型 Agent 入口：
+
+- Chat 主体逻辑位于 `argupaper.agents.chat`，使用 LangGraph 构建 Planner + ReAct Tool Loop + Agent State，未新增 `workflows/chat`。
+- 现有 `PapersWorkflow`、`AnalyzeWorkflow`、`InteractiveSearchWorkflow` 与 PaperStore 读取被封装为 LangChain tools，chat 不重写业务逻辑。
+- CLI 只负责 prompt-toolkit 交互、Rich 输出、`/exit`、任务运行锁和 ESC 最佳努力中断。
+- 新增 `CHAT_LOG_PATH`，默认写入 `data/logs/chat/`，每次会话生成 JSONL 审计日志。
+- README 与 `docs/SMOKE.md` 已补充 chat 使用方式、降级行为、日志路径和手工验收场景。
+
 ## Convert 结果进入 PaperStore
 
 完成时间：2026-05-30

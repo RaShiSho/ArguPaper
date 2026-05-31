@@ -218,3 +218,30 @@ uv run argupaper --version
 - `search --source both` 当前支持多源聚合，但去重仍不是严格正确的，在同标题不同论文场景下可能误合并结果。
 - `strict_journal` 和 `authoritative_publication` 当前基于 venue 名称做启发式过滤，不保证完整覆盖真实期刊。
 - 像 `Nature`、`Science`、`Cell`、`PNAS` 这类不含通用期刊关键词的 venue，当前可能被错误过滤掉。
+
+## Chat Agent Runtime
+
+`argupaper chat` 是面向本地科研阅读的会话型 Agent 入口。它的主体逻辑位于 `argupaper.agents.chat`，使用 LangGraph 构建 Planner + ReAct Tool Loop + Agent State；`analyze`、`search`、`papers` 等现有 workflows 只作为可调用 tools 被封装，不承载 chat 主体逻辑。
+
+启动：
+
+```bash
+uv run argupaper chat
+```
+
+支持命令：
+
+- `/papers`：通过 `PapersWorkflow` tool 列出本地 PaperStore。
+- `/use <paper-id-or-name>`：选择当前论文，后续自然语言问题会使用该 selected paper。
+- `/analyze`：对当前 selected paper 调用 `AnalyzeWorkflow` tool。
+- `/exit`：退出当前 chat 进程。
+
+LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct 工具循环，例如搜索论文、读取当前论文上下文并回答问题。LLM 不可用时，自然语言会降级提示；slash commands 仍可使用。
+
+运行日志写入：
+
+```env
+CHAT_LOG_PATH=./data/logs/chat
+```
+
+未配置 `CHAT_LOG_PATH` 时默认写入 `LOG_PATH/chat`。日志为 JSONL 审计记录，包含 state transition、planner decision、tool call、observation、warning、interrupt 和 final response 摘要；当前不支持从日志恢复对话。
