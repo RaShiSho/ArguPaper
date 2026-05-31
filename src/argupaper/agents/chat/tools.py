@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, Optional
 
 from langchain_core.tools import StructuredTool
@@ -132,15 +133,37 @@ class ChatToolbox:
         """List saved papers through PapersWorkflow."""
 
         self._progress("Listing saved papers...")
-        result = await PapersWorkflow(self.paper_store).run(
-            PapersOptions(query=query.strip() if query else None, limit=limit)
-        )
+        normalized_query = query.strip() if query else None
+        if normalized_query:
+            all_records = await self.paper_store.list_papers()
+            records, tokens = await self._search_local_records(normalized_query, all_records)
+            limited_records = records[:limit]
+            return {
+                "tool": "list_papers",
+                "ok": True,
+                "summary": self._summarize_records(
+                    limited_records,
+                    query=normalized_query,
+                    total_count=len(all_records),
+                    matched_count=len(records),
+                ),
+                "data": {
+                    "records": limited_records,
+                    "count": len(limited_records),
+                    "total_count": len(all_records),
+                    "matched_count": len(records),
+                    "query": normalized_query,
+                    "tokens": tokens,
+                },
+            }
+
+        result = await PapersWorkflow(self.paper_store).run(PapersOptions(limit=limit))
         records = result.records
         return {
             "tool": "list_papers",
             "ok": True,
-            "summary": self._summarize_records(records),
-            "data": {"records": records, "count": len(records)},
+            "summary": self._summarize_records(records, total_count=len(records)),
+            "data": {"records": records, "count": len(records), "total_count": len(records)},
         }
 
     async def select_paper(self, paper: str) -> dict[str, Any]:
@@ -302,10 +325,110 @@ class ChatToolbox:
     def _record_metadata(self, record: dict[str, Any]) -> dict[str, Any]:
         return dict(record.get("metadata", record))
 
-    def _summarize_records(self, records: list[dict[str, Any]]) -> str:
+    async def _search_local_records(
+        self,
+        query: str,
+        records: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Run chat-local loose keyword search without changing PaperStore."""
+
+        tokens = self._tokenize_local_query(query)
+        scored_records: list[tuple[int, str, dict[str, Any]]] = []
+        for metadata in records:
+            full_record = await self.paper_store.get_paper(str(metadata.get("paper_id", "")))
+            searchable_text = self._build_searchable_text(metadata, full_record)
+            title_text = str(metadata.get("title", "")).lower()
+            source_text = str(metadata.get("source", "")).lower()
+
+            score = 0
+            for token in tokens:
+                if token not in searchable_text:
+                    continue
+                score += searchable_text.count(token)
+                if token in title_text:
+                    score += 5
+                if token in source_text:
+                    score += 2
+            if score > 0:
+                scored_records.append((score, str(metadata.get("updated_at", "")), metadata))
+
+        scored_records.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [item[2] for item in scored_records], tokens
+
+    def _tokenize_local_query(self, query: str) -> list[str]:
+        """Tokenize mixed Chinese/English local-library queries for loose matching."""
+
+        lowered = query.lower()
+        tokens: list[str] = []
+        tokens.extend(re.findall(r"[a-z0-9][a-z0-9_-]*", lowered))
+
+        cjk_stopwords = {
+            "本地",
+            "论文",
+            "论文库",
+            "相关",
+            "有关",
+            "查找",
+            "检索",
+            "筛选",
+        }
+        for chunk in re.findall(r"[\u4e00-\u9fff]+", lowered):
+            if len(chunk) >= 2 and chunk not in cjk_stopwords:
+                tokens.append(chunk)
+            if len(chunk) > 2:
+                tokens.extend(
+                    chunk[index : index + 2]
+                    for index in range(len(chunk) - 1)
+                    if chunk[index : index + 2] not in cjk_stopwords
+                )
+
+        deduped: list[str] = []
+        for token in tokens:
+            cleaned = token.strip()
+            if len(cleaned) < 2 or cleaned in deduped:
+                continue
+            deduped.append(cleaned)
+        return deduped or [lowered.strip()]
+
+    def _build_searchable_text(
+        self,
+        metadata: dict[str, Any],
+        full_record: dict[str, Any] | None,
+    ) -> str:
+        parts = [
+            str(metadata.get(field, ""))
+            for field in ("paper_id", "title", "source", "library_status")
+        ]
+        if full_record is not None:
+            parts.append(json.dumps(full_record.get("abstract", {}), ensure_ascii=False))
+            parts.append(str(full_record.get("markdown", ""))[:12000])
+            parts.append(str(full_record.get("report", ""))[:12000])
+        return " ".join(parts).lower()
+
+    def _summarize_records(
+        self,
+        records: list[dict[str, Any]],
+        *,
+        query: str | None = None,
+        total_count: int | None = None,
+        matched_count: int | None = None,
+    ) -> str:
         if not records:
+            if query:
+                total = 0 if total_count is None else total_count
+                return (
+                    f"Local paper library has {total} saved paper record(s), "
+                    f"but none matched query: {query}."
+                )
             return "No saved paper records found."
-        lines = [f"Found {len(records)} saved paper record(s)."]
+        if query:
+            matched = len(records) if matched_count is None else matched_count
+            lines = [
+                f"Found {len(records)} of {matched} matching saved paper record(s) "
+                f"for query: {query}."
+            ]
+        else:
+            lines = [f"Found {len(records)} saved paper record(s)."]
         for record in records[:5]:
             lines.append(
                 f"- {record.get('paper_id', 'N/A')} [{record.get('library_status', 'analyzed')}]: "

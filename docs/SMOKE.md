@@ -305,8 +305,9 @@ uv run argupaper chat
   2. 输入“找 5 篇 RAG 论文”
   3. 输入 `/use <paper_id_or_title>`
   4. 输入“这篇论文的主要贡献是什么”
-  5. 取消 LLM provider 配置后重新启动 chat，输入自然语言与 `/papers`
-- 预期结果：自然语言搜索会调用 `search_papers` tool；当前论文问答会调用 `read_paper_context` tool；LLM 不可用时自然语言给出降级提示，`/papers` 等 slash commands 仍可执行
+  5. 输入“在本地论文库中找2篇与agent安全相关的论文”
+  6. 取消 LLM provider 配置后重新启动 chat，输入自然语言与 `/papers`
+- 预期结果：自然语言搜索会调用 `search_papers` tool；当前论文问答会调用 `read_paper_context` tool；本地库检索会调用 `list_papers` tool，`agent安全` 这类复合 query 应能宽松匹配包含 `agent` 的本地记录；LLM 不可用时自然语言给出降级提示，`/papers` 等 slash commands 仍可执行
 - 记录：____
 
 ### 25. Chat ESC 中断
