@@ -244,4 +244,8 @@ LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct �
 CHAT_LOG_PATH=./data/logs/chat
 ```
 
+### Chat Tool Extension
+
+`argupaper chat` now builds its LangGraph tool loop from the shared `argupaper.tools` registry. To add future Agent-callable tools, implement and register them under `src/argupaper/tools/`, then include them in `build_default_tool_registry()`. The chat graph keeps conversation state and selected-paper argument injection, while existing workflows remain wrapped as tools.
+
 未配置 `CHAT_LOG_PATH` 时默认写入 `LOG_PATH/chat`。日志为 JSONL 审计记录，包含 state transition、planner decision、tool call、observation、warning、interrupt 和 final response 摘要；当前不支持从日志恢复对话。

@@ -320,4 +320,23 @@ uv run argupaper chat
   2. 输入 `/analyze`
   3. 任务运行时按 Esc
 - 预期结果：当前任务被请求取消，界面回到输入状态；`data/logs/chat/` 对应 JSONL 日志包含 interrupted 事件；不会保存可恢复对话
-- 记录：____
+- 记录：___
+
+### 26. Chat 统一 Tool 层
+
+- 功能名称：`argupaper.tools` 统一 Agent 工具注册层
+- 适用场景：验证 chat 不再依赖 `argupaper.agents.chat.tools` 中的私有工具实现，新增工具可通过统一 registry 暴露给 LangGraph ReAct loop
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在至少一条记录
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper chat --help
+uv run argupaper chat
+/papers
+在本地论文库中找2篇与agent安全相关的论文
+/exit
+```
+
+- 预期结果：`/papers` 仍列出本地 PaperStore 记录；自然语言本地库检索仍调用 `list_papers` 并宽松匹配包含 `agent` 的记录；ReAct prompt 中的工具描述来自统一 `argupaper.tools` registry；日志 observation 仍包含 `tool`、`ok`、`summary`、`data`
+- 记录：___

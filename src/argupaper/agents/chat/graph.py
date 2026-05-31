@@ -11,9 +11,9 @@ from langgraph.graph import END, StateGraph
 
 from argupaper.agents.chat.logging import ChatRuntimeLogger
 from argupaper.agents.chat.state import ChatAgentState, ChatTurnResult, SelectedPaper
-from argupaper.agents.chat.tools import ChatToolbox, default_paper_id
 from argupaper.config import Config
 from argupaper.services.llm import LLMRouter, build_llm_router_runnable, extract_json_object
+from argupaper.tools import build_default_toolbox
 
 ProgressCallback = Optional[Callable[[str], None]]
 
@@ -65,7 +65,7 @@ class ChatAgentRuntime:
         self.session_id = uuid4().hex[:12]
         self.logger = ChatRuntimeLogger(config.log.chat_path, self.session_id)
         self.llm_router = LLMRouter(config.model)
-        self.toolbox = ChatToolbox(config, progress_callback)
+        self.toolbox = build_default_toolbox(config, progress_callback=progress_callback)
         self.graph = self._build_graph()
         self.messages: list[dict[str, str]] = []
         self.selected_paper: SelectedPaper | None = None
@@ -437,3 +437,13 @@ class ChatAgentRuntime:
     def _progress(self, message: str) -> None:
         if self.progress_callback is not None:
             self.progress_callback(message)
+
+
+def default_paper_id(arguments: dict[str, Any], selected_paper: dict[str, Any] | None) -> dict[str, Any]:
+    """Fill paper_id from the selected paper when a tool omitted it."""
+
+    if arguments.get("paper_id") or selected_paper is None:
+        return arguments
+    filled = dict(arguments)
+    filled["paper_id"] = selected_paper.get("paper_id")
+    return filled

@@ -1,5 +1,18 @@
 # DONE
 
+## Chat 统一 Tool 层
+
+完成时间：2026-05-31
+
+本次基于 OpenSpec change `move-chat-tools-to-tool-layer` 将 chat 私有工具实现迁移到统一 `argupaper.tools` 层：
+
+- `argupaper.tools.schemas` 现在包含通用 `ToolResult` envelope 与 chat 所需 input schemas。
+- `ToolRegistry` 支持 `args_schema`，并新增 `LangChainToolbox` 统一适配 LangChain `StructuredTool`、未知工具和异常 observation。
+- `paper_tools` 承载 `list_papers`、`select_paper`、`read_paper_context`，保留本地库宽松关键词检索。
+- `workflow_tools` 承载 `analyze_paper` 与 `search_papers`，继续只封装现有 workflows。
+- `ChatAgentRuntime` 通过 `build_default_toolbox()` 获取工具，`argupaper.agents.chat.tools` 仅保留兼容导出。
+- README 与 `docs/SMOKE.md` 已补充统一工具注册层的扩展与验收说明。
+
 ## LangGraph Chat Agent Runtime
 
 完成时间：2026-05-31

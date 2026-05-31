@@ -6,12 +6,55 @@ from pydantic import BaseModel, Field
 
 
 class ToolResult(BaseModel):
-    """Generic result envelope for future Agent-callable tools."""
+    """Generic result envelope for Agent-callable tools."""
 
+    tool: str = ""
     ok: bool = True
+    summary: str = ""
     data: Any = None
     warnings: list[str] = Field(default_factory=list)
 
 
-__all__ = ["ToolResult"]
+class ListPapersArgs(BaseModel):
+    """Arguments for listing or searching saved papers."""
 
+    query: str | None = Field(default=None, description="Optional local library search text.")
+    limit: int = Field(default=20, ge=1, le=50)
+
+
+class SelectPaperArgs(BaseModel):
+    """Arguments for selecting a saved paper."""
+
+    paper: str = Field(description="Paper id, unique id prefix, title, source, or search text.")
+
+
+class AnalyzePaperArgs(BaseModel):
+    """Arguments for analyzing one paper."""
+
+    paper_id: str | None = Field(default=None, description="Paper id. Defaults to selected paper.")
+    rounds: int = Field(default=3, ge=1, le=8)
+
+
+class SearchPapersArgs(BaseModel):
+    """Arguments for external paper search."""
+
+    query: str
+    limit: int = Field(default=10, ge=1, le=50)
+    source: str = Field(default="both")
+
+
+class ReadPaperContextArgs(BaseModel):
+    """Arguments for reading selected paper context."""
+
+    paper_id: str | None = Field(default=None, description="Paper id. Defaults to selected paper.")
+    max_chars: int = Field(default=6000, ge=500, le=20000)
+
+
+__all__ = [
+    "AnalyzePaperArgs",
+    "ListPapersArgs",
+    "ReadPaperContextArgs",
+    "SearchPapersArgs",
+    "SelectPaperArgs",
+    "ToolResult",
+]
