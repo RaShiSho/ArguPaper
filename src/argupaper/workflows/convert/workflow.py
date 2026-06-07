@@ -9,7 +9,9 @@ from typing import Callable, Optional
 from uuid import uuid4
 
 from argupaper.config import Config
+from argupaper.domain.paper.title import PaperTitleResolver
 from argupaper.memory.paper_store import PaperStore
+from argupaper.services.llm import LLMRouter
 from argupaper.services.pdf import ConversionResult, MarkdownCache, MinerUClient, PDFPipeline
 from argupaper.workflows.convert.options import ConvertOptions
 from argupaper.workflows.convert.result import ConvertWorkflowResult, FolderConvertSummary
@@ -22,9 +24,18 @@ FileEventCallback = Optional[Callable[[str], None]]
 class ConvertWorkflow:
     """Convert local PDFs to cached Markdown."""
 
-    def __init__(self, config: Config, paper_store: Optional[PaperStore] = None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        paper_store: Optional[PaperStore] = None,
+        title_resolver: Optional[PaperTitleResolver] = None,
+        llm_router: Optional[LLMRouter] = None,
+    ) -> None:
         self.config = config
         self.paper_store = paper_store or PaperStore(storage_path=config.paper_storage_path)
+        self.title_resolver = title_resolver or PaperTitleResolver()
+        self.llm_router = llm_router or LLMRouter(config.model)
+        self._owns_llm_router = llm_router is None
 
     async def run(
         self,
@@ -34,11 +45,17 @@ class ConvertWorkflow:
     ) -> ConvertWorkflowResult:
         """Run a single-file or folder conversion."""
 
-        self._validate_options(options)
-        cache, pipeline = self._build_pipeline()
-        if options.folder_path is not None:
-            return await self._run_folder(options, cache, pipeline, progress_callback, file_event_callback)
-        return await self._run_single(options, cache, pipeline, progress_callback)
+        try:
+            self._validate_options(options)
+            cache, pipeline = self._build_pipeline()
+            if options.folder_path is not None:
+                return await self._run_folder(
+                    options, cache, pipeline, progress_callback, file_event_callback
+                )
+            return await self._run_single(options, cache, pipeline, progress_callback)
+        finally:
+            if self._owns_llm_router:
+                await self.llm_router.close()
 
     def _build_pipeline(self) -> tuple[MarkdownCache, PDFPipeline]:
         cache = MarkdownCache(cache_dir=self.config.pdf.cache_dir)
@@ -240,12 +257,19 @@ class ConvertWorkflow:
     async def _sync_converted_paper(self, pdf_path: Path, result: ConversionResult) -> None:
         """Persist a successful conversion into the local PaperStore."""
 
+        title_result = await self.title_resolver.resolve(
+            result.markdown or "",
+            str(pdf_path),
+            self.llm_router,
+        )
         await self.paper_store.save_converted_paper(
             paper_id=result.cache_key,
             source=str(pdf_path),
-            title=pdf_path.stem,
+            title=title_result.title,
             markdown=result.markdown or "",
             from_cache=result.from_cache,
+            title_source=title_result.source,
+            title_confidence=title_result.confidence,
         )
 
 

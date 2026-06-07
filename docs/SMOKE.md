@@ -340,3 +340,21 @@ uv run argupaper chat
 
 - 预期结果：`/papers` 仍列出本地 PaperStore 记录；自然语言本地库检索仍调用 `list_papers` 并宽松匹配包含 `agent` 的记录；ReAct prompt 中的工具描述来自统一 `argupaper.tools` registry；日志 observation 仍包含 `tool`、`ok`、`summary`、`data`
 - 记录：___
+
+### 27. 论文真实标题入库
+
+- 功能名称：PaperStore 使用 Markdown 真实标题
+- 适用场景：验证 convert/analyze 写入 PaperStore 前会从论文 Markdown 正文解析真实标题，而不是直接使用 PDF 文件名
+- 前置条件：已执行 `uv sync`；已配置 `MINERU_API_KEY`；准备一个 PDF 文件名与正文标题不一致的样例，例如 `WTF.pdf`，其转换 Markdown 首行为 `# What the fuck`
+- 执行命令：
+
+```powershell
+uv run argupaper convert .\WTF.pdf
+uv run argupaper papers
+uv run argupaper papers <paper_id>
+uv run argupaper analyze <paper_id_or_cache_name> --rounds 1
+uv run argupaper papers <paper_id>
+```
+
+- 预期结果：首次 convert 后 PaperStore metadata 的 `title` 为 Markdown 正文标题 `What the fuck`，不是 `WTF`；metadata 包含 `title_source` 与 `title_confidence`；analyze 后同一记录升级为 `analyzed` 且仍保留真实标题；若 Markdown 没有有效标题，流程不失败并回退文件名。
+- 记录：___

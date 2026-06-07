@@ -11,6 +11,7 @@ from argupaper.pipelines.evidence_pipeline import EvidenceChain
 from argupaper.agents.models import AgentMessage, DebateState
 from argupaper.config import Config
 from argupaper.domain.paper.structured import StructuredExtractor
+from argupaper.domain.paper.title import PaperTitleResolver
 from argupaper.domain.verdict.consensus import ConsensusDetector
 from argupaper.services.llm import LLMRouter
 from argupaper.memory.paper_store import PaperStore
@@ -51,6 +52,7 @@ class AnalyzeWorkflow:
         search_workflow: Optional[SearchWorkflow] = None,
         pipeline_factory: PipelineFactory = None,
         llm_router: Optional[LLMRouter] = None,
+        title_resolver: Optional[PaperTitleResolver] = None,
     ):
         self.config = config
         self.extractor = extractor or StructuredExtractor()
@@ -67,6 +69,7 @@ class AnalyzeWorkflow:
         self.paper_store = paper_store or PaperStore(storage_path=config.paper_storage_path)
         self.search_workflow = search_workflow or SearchWorkflow(config)
         self.pipeline_factory = pipeline_factory
+        self.title_resolver = title_resolver or PaperTitleResolver()
 
     async def run(
         self,
@@ -203,6 +206,11 @@ class AnalyzeWorkflow:
         if progress_callback:
             progress_callback("Running analysis...")
         analysis = await self.analysis_chain.run(markdown)
+        title_result = await self.title_resolver.resolve(markdown, source_label, self.llm_router)
+        warnings.extend(warning for warning in title_result.warnings if warning not in warnings)
+        paper_title = title_result.title
+        analysis = dict(analysis)
+        analysis["title"] = paper_title
 
         if progress_callback:
             progress_callback("Running evidence checks...")
@@ -218,7 +226,7 @@ class AnalyzeWorkflow:
             if progress_callback:
                 progress_callback("Running supplementary retrieval...")
             try:
-                query = analysis.get("title") or structured.get("problem") or Path(source_label).stem
+                query = paper_title or structured.get("problem") or Path(source_label).stem
                 search_result = await self.search_workflow.run(
                     SearchOptions(query=query, limit=3, source="semantic_scholar", verbose=False)
                 )
@@ -309,7 +317,9 @@ class AnalyzeWorkflow:
                 "metadata": {
                     "paper_id": paper_id,
                     "source": source_label,
-                    "title": analysis.get("title") or Path(source_label).stem,
+                    "title": paper_title,
+                    "title_source": title_result.source,
+                    "title_confidence": title_result.confidence,
                     "from_cache": markdown_input.from_cache,
                 },
                 "abstract": structured,
@@ -320,7 +330,7 @@ class AnalyzeWorkflow:
 
         return AnalyzeWorkflowResult(
             report_markdown=report_markdown,
-            report_title=analysis.get("title") or Path(source_label).stem,
+            report_title=paper_title,
             from_cache=markdown_input.from_cache,
             paper_id=paper_id,
             supplementary_search_used=supplementary_search_used,

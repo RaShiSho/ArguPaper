@@ -1,5 +1,16 @@
 # DONE
 
+## 论文真实标题入库
+
+完成时间：2026-06-08
+
+本次将论文写入 PaperStore 前的标题来源从 PDF 文件名调整为 Markdown 正文解析结果：
+
+- 新增 `PaperTitleResolver`，优先从 Markdown 前部解析真实标题，无法可靠解析时再尝试已配置 LLM，最后回退文件名。
+- `ConvertWorkflow` 写入 converted 记录时不再直接使用 PDF stem，`AnalyzeWorkflow` 也复用同一解析结果作为报告标题、检索 query 与 metadata title。
+- PaperStore metadata 新增 `title_source` 与 `title_confidence`，旧记录保持兼容，不执行自动回填。
+- `docs/SMOKE.md` 已补充真实标题入库的手工验收步骤。
+
 ## Chat 统一 Tool 层
 
 完成时间：2026-05-31

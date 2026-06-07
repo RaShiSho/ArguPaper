@@ -47,18 +47,26 @@ class PaperStore:
         title: str,
         markdown: str,
         from_cache: bool,
+        title_source: str | None = None,
+        title_confidence: float | None = None,
     ) -> None:
         """Save a converted-only paper record for local library browsing."""
 
+        metadata = {
+            "paper_id": paper_id,
+            "source": source,
+            "title": title,
+            "from_cache": from_cache,
+            "library_status": LIBRARY_STATUS_CONVERTED,
+        }
+        if title_source is not None:
+            metadata["title_source"] = title_source
+        if title_confidence is not None:
+            metadata["title_confidence"] = title_confidence
+
         await self.save_paper_record(
             paper_id=paper_id,
-            metadata={
-                "paper_id": paper_id,
-                "source": source,
-                "title": title,
-                "from_cache": from_cache,
-                "library_status": LIBRARY_STATUS_CONVERTED,
-            },
+            metadata=metadata,
             abstract={},
             markdown=markdown,
             report="",
