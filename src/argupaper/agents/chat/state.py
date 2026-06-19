@@ -68,4 +68,5 @@ class ChatAgentState(TypedDict):
     memory_context: list[dict[str, Any]]
     agent_roles: list[str]
     handoff_target: str | None
+    local_first_goal: str | None
     route: NotRequired[str]

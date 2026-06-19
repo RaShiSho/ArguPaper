@@ -1,6 +1,7 @@
 """Tool registry and LangChain adapter for Agent tool calling."""
 
 import inspect
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -57,6 +58,55 @@ class ToolRegistry:
 
         return [self._tools[name] for name in sorted(self._tools)]
 
+    def normalize_arguments(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Normalize common LLM-generated argument aliases for one tool."""
+
+        normalized = dict(arguments)
+        aliases = _ARGUMENT_ALIASES.get(name, {})
+        for alias, target in aliases.items():
+            if alias not in normalized:
+                continue
+            alias_value = normalized.pop(alias)
+            if _has_value(normalized.get(target)):
+                continue
+            normalized[target] = _normalize_alias_value(alias_value)
+        return normalized
+
+    def tool_specs(self) -> str:
+        """Return schema-aware tool specs for prompts."""
+
+        return "\n\n".join(self._format_tool_spec(tool) for tool in self.list_tools())
+
+    def _format_tool_spec(self, tool: RegisteredTool) -> str:
+        lines = [f"- name: {tool.name}", f"  description: {tool.description}"]
+        if tool.args_schema is None:
+            lines.append("  arguments: none")
+            lines.append("  required: none")
+            return "\n".join(lines)
+
+        schema = tool.args_schema.model_json_schema()
+        properties = schema.get("properties", {})
+        required = set(schema.get("required", []))
+        lines.append("  arguments:")
+        for field_name, field_schema in properties.items():
+            type_name = _schema_type(field_schema)
+            required_text = "required" if field_name in required else "optional"
+            description = str(field_schema.get("description", "")).strip()
+            default = field_schema.get("default", None)
+            suffix_parts = [type_name, required_text]
+            if "default" in field_schema and default is not None:
+                suffix_parts.append(f"default={json.dumps(default, ensure_ascii=False)}")
+            suffix = ", ".join(suffix_parts)
+            if description:
+                lines.append(f"    - {field_name} ({suffix}): {description}")
+            else:
+                lines.append(f"    - {field_name} ({suffix})")
+        if required:
+            lines.append(f"  required: {', '.join(sorted(required))}")
+        else:
+            lines.append("  required: none")
+        return "\n".join(lines)
+
 
 class LangChainToolbox:
     """Expose a ToolRegistry as LangChain tools with normalized observations."""
@@ -69,6 +119,7 @@ class LangChainToolbox:
     async def ainvoke(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Invoke one registered tool and normalize failures as observations."""
 
+        arguments = self.normalize_arguments(name, arguments)
         tool = self.tools_by_name.get(name)
         if tool is None:
             return {
@@ -96,6 +147,16 @@ class LangChainToolbox:
         return "\n".join(
             f"- {tool.name}: {tool.description}" for tool in sorted(self.tools, key=lambda item: item.name)
         )
+
+    def normalize_arguments(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Normalize common LLM-generated argument aliases for one tool."""
+
+        return self.registry.normalize_arguments(name, arguments)
+
+    def tool_specs(self) -> str:
+        """Return schema-aware tool specs for prompts."""
+
+        return self.registry.tool_specs()
 
     def _build_tools(self) -> list[StructuredTool]:
         tools: list[StructuredTool] = []
@@ -132,6 +193,58 @@ class LangChainToolbox:
         if payload.get("warnings") is None:
             payload["warnings"] = []
         return payload
+
+
+_ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
+    "select_paper": {
+        "query": "paper",
+        "id": "paper",
+        "paper_id": "paper",
+        "name": "paper",
+        "title": "paper",
+    },
+    "read_paper_context": {
+        "id": "paper_id",
+        "paper": "paper_id",
+        "name": "paper_id",
+    },
+    "analyze_paper": {
+        "id": "paper_id",
+        "paper": "paper_id",
+        "name": "paper_id",
+    },
+    "list_papers": {
+        "keyword": "query",
+        "keywords": "query",
+        "name": "query",
+    },
+    "search_papers": {
+        "keyword": "query",
+        "keywords": "query",
+        "name": "query",
+    },
+}
+
+
+def _has_value(value: Any) -> bool:
+    return value is not None and str(value).strip() != ""
+
+
+def _normalize_alias_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return " ".join(str(item).strip() for item in value if str(item).strip())
+    return value
+
+
+def _schema_type(field_schema: dict[str, Any]) -> str:
+    if "type" in field_schema:
+        return str(field_schema["type"])
+    any_of = field_schema.get("anyOf")
+    if isinstance(any_of, list):
+        type_names = [str(item.get("type", "")) for item in any_of if isinstance(item, dict) and item.get("type")]
+        if type_names:
+            return " | ".join(type_names)
+    return "unknown"
 
 
 __all__ = ["LangChainToolbox", "RegisteredTool", "ToolCallable", "ToolRegistry"]

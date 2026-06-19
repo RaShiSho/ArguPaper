@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from typing import Any, Optional
 from uuid import uuid4
@@ -81,6 +83,7 @@ class ChatAgentRuntime:
             "memory_context": list(self.memory_context),
             "agent_roles": list(self.agent_roles),
             "handoff_target": self.handoff_target,
+            "local_first_goal": None,
         }
         self.logger.write("turn_start", {"run_id": run_id, "input": user_input})
         try:
@@ -161,6 +164,26 @@ class ChatAgentRuntime:
                 "route": "react",
             }
 
+        local_first = self._local_first_action(user_input, state.get("selected_paper"))
+        if local_first is not None:
+            plan = str(local_first["plan"])
+            action = dict(local_first["action"])
+            self.logger.write(
+                "planner_decision",
+                {
+                    "run_id": state["run_id"],
+                    "plan": plan,
+                    "action": action,
+                    "local_first": True,
+                },
+            )
+            return {
+                "plan": plan,
+                "pending_action": action,
+                "local_first_goal": local_first["goal"],
+                "route": "react",
+            }
+
         if not self.llm_router.has_provider("default"):
             return {
                 "fallback_reason": "Default LLM provider is not configured.",
@@ -210,6 +233,10 @@ class ChatAgentRuntime:
                 "route": "respond",
             }
 
+        local_first_response = self._continue_or_finish_local_first(state)
+        if local_first_response is not None:
+            return local_first_response
+
         if state.get("react_steps", 0) >= state.get("max_steps", self.max_steps):
             return {
                 "final_response": "已达到本轮工具调用上限，先根据已有结果收束：\n"
@@ -240,7 +267,7 @@ class ChatAgentRuntime:
             response = str(
                 await runnable.ainvoke(
                     {
-                        "tools": self.toolbox.descriptions(),
+                        "tools": self.toolbox.tool_specs(),
                         "plan": state.get("plan", ""),
                         "user_input": state["user_input"],
                         "selected_paper": self._selected_text(state.get("selected_paper")),
@@ -256,18 +283,62 @@ class ChatAgentRuntime:
                 "route": "fallback",
             }
 
-        self.logger.write("react_decision", {"run_id": state["run_id"], "action": action})
         action_name = str(action.get("action", "")).strip()
         if action_name == "tool_call":
+            tool_name = str(action.get("tool", "")).strip()
+            raw_arguments = action.get("arguments", {}) or {}
+            arguments = self._prepare_tool_arguments(
+                tool_name,
+                dict(raw_arguments) if isinstance(raw_arguments, dict) else {},
+                state.get("selected_paper"),
+            )
+            self.logger.write(
+                "react_decision",
+                {
+                    "run_id": state["run_id"],
+                    "action": action,
+                    "normalized_arguments": arguments,
+                },
+            )
+            duplicate = self._find_duplicate_tool_call(state.get("tool_calls", []), tool_name, arguments)
+            if duplicate is not None:
+                signature = self._tool_signature(tool_name, arguments)
+                self.logger.write(
+                    "duplicate_tool_call_blocked",
+                    {
+                        "run_id": state["run_id"],
+                        "tool": tool_name,
+                        "arguments": arguments,
+                        "signature": signature,
+                        "previous_ok": duplicate.get("ok", False),
+                    },
+                )
+                warnings = list(state.get("warnings", []))
+                warning = f"Duplicate tool call blocked: {tool_name}"
+                if warning not in warnings:
+                    warnings.append(warning)
+                if duplicate.get("ok", False) and state.get("observations"):
+                    final_response = self._format_observation_response(state["observations"][-1])
+                else:
+                    final_response = (
+                        f"工具调用 `{tool_name}` 使用相同参数重复失败，已停止重复执行。"
+                        + ("\n" + self._summarize_observations(state.get("observations", [])))
+                    )
+                return {
+                    "final_response": final_response,
+                    "warnings": warnings,
+                    "route": "respond",
+                }
             return {
                 "pending_action": {
                     "action": "tool_call",
-                    "tool": str(action.get("tool", "")).strip(),
-                    "arguments": action.get("arguments", {}) or {},
+                    "tool": tool_name,
+                    "arguments": arguments,
                 },
                 "react_steps": state.get("react_steps", 0) + 1,
                 "route": "tool_executor",
             }
+        self.logger.write("react_decision", {"run_id": state["run_id"], "action": action})
         if action_name in {"final_answer", "ask_user"}:
             return {"final_response": str(action.get("content", "")).strip(), "route": "respond"}
         return {
@@ -280,11 +351,18 @@ class ChatAgentRuntime:
         self.logger.write("state_transition", {"run_id": state["run_id"], "node": "tool_executor"})
         action = state.get("pending_action") or {}
         tool_name = str(action.get("tool", "")).strip()
-        arguments = dict(action.get("arguments", {}) or {})
-        arguments = default_paper_id(arguments, self._selected_dict(state.get("selected_paper")))
+        raw_arguments = dict(action.get("arguments", {}) or {})
+        arguments = self._prepare_tool_arguments(tool_name, raw_arguments, state.get("selected_paper"))
+        signature = self._tool_signature(tool_name, arguments)
         self.logger.write(
             "tool_call",
-            {"run_id": state["run_id"], "tool": tool_name, "arguments": arguments},
+            {
+                "run_id": state["run_id"],
+                "tool": tool_name,
+                "arguments": arguments,
+                "raw_arguments": raw_arguments,
+                "signature": signature,
+            },
         )
         observation = await self.toolbox.ainvoke(tool_name, arguments)
         self.logger.write(
@@ -294,7 +372,12 @@ class ChatAgentRuntime:
         observations = [*state.get("observations", []), observation]
         tool_calls = [
             *state.get("tool_calls", []),
-            {"tool": tool_name, "arguments": arguments, "ok": observation.get("ok", False)},
+            {
+                "tool": tool_name,
+                "arguments": arguments,
+                "ok": observation.get("ok", False),
+                "signature": signature,
+            },
         ]
         update: dict[str, Any] = {
             "pending_action": None,
@@ -407,10 +490,200 @@ class ChatAgentRuntime:
         if self.progress_callback is not None:
             self.progress_callback(message)
 
+    def _local_first_action(self, user_input: str, selected: Any) -> dict[str, Any] | None:
+        if self._is_explicit_external_search(user_input):
+            return None
+        if self._is_local_library_search(user_input):
+            query = self._extract_local_library_query(user_input)
+            arguments: dict[str, Any] = {"limit": self._extract_limit(user_input, default=20)}
+            if query:
+                arguments["query"] = query
+            return {
+                "goal": "list_local",
+                "plan": "Local-first: search saved PaperStore records before any external search.",
+                "action": {"action": "tool_call", "tool": "list_papers", "arguments": arguments},
+            }
+        if not self._is_paper_content_request(user_input):
+            return None
+        if self._mentions_current_paper(user_input) and self._selected_dict(selected):
+            return {
+                "goal": "read_selected",
+                "plan": "Local-first: read the selected PaperStore record context.",
+                "action": {"action": "tool_call", "tool": "read_paper_context", "arguments": {}},
+            }
+        paper_query = self._extract_local_paper_query(user_input)
+        if paper_query:
+            return {
+                "goal": "read_context_after_select",
+                "plan": "Local-first: select a matching saved PaperStore record before considering external search.",
+                "action": {
+                    "action": "tool_call",
+                    "tool": "select_paper",
+                    "arguments": {"paper": paper_query},
+                },
+            }
+        if self._selected_dict(selected):
+            return {
+                "goal": "read_selected",
+                "plan": "Local-first: read the selected PaperStore record context.",
+                "action": {"action": "tool_call", "tool": "read_paper_context", "arguments": {}},
+            }
+        return None
 
-def default_paper_id(arguments: dict[str, Any], selected_paper: dict[str, Any] | None) -> dict[str, Any]:
+    def _continue_or_finish_local_first(self, state: ChatAgentState) -> dict[str, Any] | None:
+        goal = state.get("local_first_goal")
+        observations = state.get("observations", [])
+        if not goal or not observations:
+            return None
+
+        last = observations[-1]
+        last_tool = str(last.get("tool", ""))
+        if goal == "list_local":
+            return {"final_response": self._format_observation_response(last), "route": "respond"}
+        if goal == "read_selected" and last_tool == "read_paper_context":
+            return {"final_response": self._format_observation_response(last), "route": "respond"}
+        if goal == "read_context_after_select":
+            if last_tool == "read_paper_context":
+                return {"final_response": self._format_observation_response(last), "route": "respond"}
+            if last_tool == "select_paper" and last.get("ok", False):
+                return {
+                    "pending_action": {
+                        "action": "tool_call",
+                        "tool": "read_paper_context",
+                        "arguments": {},
+                    },
+                    "route": "tool_executor",
+                }
+        return None
+
+    def _prepare_tool_arguments(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        selected: Any,
+    ) -> dict[str, Any]:
+        normalized = self.toolbox.normalize_arguments(tool_name, arguments)
+        return default_paper_id(tool_name, normalized, self._selected_dict(selected))
+
+    def _find_duplicate_tool_call(
+        self,
+        tool_calls: list[dict[str, Any]],
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        signature = self._tool_signature(tool_name, arguments)
+        for item in reversed(tool_calls):
+            item_signature = str(item.get("signature", ""))
+            if not item_signature:
+                item_signature = self._tool_signature(
+                    str(item.get("tool", "")),
+                    dict(item.get("arguments", {}) or {}),
+                )
+            if item_signature == signature:
+                return item
+        return None
+
+    def _tool_signature(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        payload = json.dumps(arguments, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return f"{tool_name}:{payload}"
+
+    def _is_explicit_external_search(self, user_input: str) -> bool:
+        text = user_input.lower()
+        if "本地" in text or "本地库" in text or "论文库" in text:
+            return False
+        markers = [
+            "外部",
+            "全网",
+            "联网",
+            "网上",
+            "新论文",
+            "最新",
+            "推荐",
+            "arxiv",
+            "semantic scholar",
+            "google scholar",
+            "serpapi",
+        ]
+        return any(marker in text for marker in markers)
+
+    def _is_local_library_search(self, user_input: str) -> bool:
+        text = user_input.lower()
+        has_local_scope = any(marker in text for marker in ("本地论文库", "本地库", "本地", "paperstore"))
+        has_search_verb = any(marker in text for marker in ("找", "查找", "搜索", "检索", "筛选", "filter", "search"))
+        return has_local_scope and has_search_verb
+
+    def _is_paper_content_request(self, user_input: str) -> bool:
+        text = user_input.lower()
+        markers = [
+            "讲讲",
+            "看看",
+            "介绍",
+            "相关信息",
+            "具体内容",
+            "讲了什么",
+            "说了什么",
+            "这篇论文",
+            "这篇文章",
+            "当前论文",
+            "selected paper",
+            "tell me about",
+            "summarize",
+        ]
+        return any(marker in text for marker in markers)
+
+    def _mentions_current_paper(self, user_input: str) -> bool:
+        text = user_input.lower()
+        return any(marker in text for marker in ("这篇", "这篇论文", "这篇文章", "当前论文", "selected paper"))
+
+    def _extract_limit(self, user_input: str, *, default: int) -> int:
+        match = re.search(r"(\d{1,2})\s*(?:篇|个|papers?|条)?", user_input, flags=re.IGNORECASE)
+        if match is None:
+            return default
+        return max(1, min(int(match.group(1)), 50))
+
+    def _extract_local_library_query(self, user_input: str) -> str | None:
+        for pattern in (r"与\s*(?P<query>.+?)\s*相关", r"关于\s*(?P<query>.+?)\s*的"):
+            match = re.search(pattern, user_input, flags=re.IGNORECASE)
+            if match:
+                return self._clean_extracted_query(match.group("query"))
+        cleaned = re.sub(r"\d+\s*(?:篇|个|papers?|条)?", " ", user_input, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"(在|从|本地论文库|本地库|本地|论文库|中|里|找|查找|搜索|检索|筛选|论文|文章|相关|有关|给我|帮我)",
+            " ",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        return self._clean_extracted_query(cleaned)
+
+    def _extract_local_paper_query(self, user_input: str) -> str | None:
+        patterns = [
+            r"(?:帮我看看|和我讲讲|讲讲|看看|介绍一下|介绍|说说|聊聊|解释一下|解释|阅读)\s*(?P<paper>.+?)(?:这篇论文|这篇文章|这篇|论文|文章|的具体内容|具体内容|讲了什么|说了什么|内容|相关信息|$)",
+            r"(?P<paper>[A-Za-z0-9][A-Za-z0-9_.:\- ]{1,80})\s*(?:这篇论文|这篇文章|这篇|论文|文章|paper)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, user_input, flags=re.IGNORECASE)
+            if match:
+                return self._clean_extracted_query(match.group("paper"))
+        return None
+
+    def _clean_extracted_query(self, value: str) -> str | None:
+        cleaned = value.strip(" \t\r\n，。！？!?：:；;、\"'`")
+        cleaned = re.sub(r"^(帮我|给我|和我|请|一下|这篇|这篇论文|这篇文章)\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not cleaned:
+            return None
+        return cleaned
+
+
+def default_paper_id(
+    tool_name: str,
+    arguments: dict[str, Any],
+    selected_paper: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Fill paper_id from the selected paper when a tool omitted it."""
 
+    if tool_name not in {"read_paper_context", "analyze_paper"}:
+        return arguments
     if arguments.get("paper_id") or selected_paper is None:
         return arguments
     filled = dict(arguments)

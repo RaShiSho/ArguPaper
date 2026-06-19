@@ -2,6 +2,27 @@
 
 本文件是项目唯一的手工 smoke 验收入口。
 
+## Chat 本地优先与工具调用稳定化
+
+- 功能名称：`argupaper chat` 本地优先与 ReAct 工具调用防重复
+- 适用场景：验证 chat Agent 对本地论文内容请求优先走 PaperStore，并避免重复执行相同错误 tool call
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在至少一条本地论文记录，建议包含 BackdoorAgent 相关记录；如需自然语言 LLM 路径，已配置 `LLM_PROVIDER__DEFAULT__*`
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper chat --help
+uv run argupaper chat
+/papers
+/use BackdoorAgent
+帮我看看backdooragent这篇论文讲了什么
+在本地论文库中找2篇与agent安全相关的论文
+/exit
+```
+
+- 预期结果：`/papers` 正常列出本地库；`/use BackdoorAgent` 可选中论文；“帮我看看 backdooragent” 类请求在日志中优先出现 `select_paper` 或 `read_paper_context`，不先调用 `search_papers`；本地库检索走 `list_papers` 并尊重 limit；日志中的 `tool_call.arguments` 为归一化后的参数；相同 tool 与相同参数重复出现时写入 `duplicate_tool_call_blocked`，不继续重复执行。
+- 记录：___
+
 ## 表单模板
 
 每条 smoke 项按以下字段维护：

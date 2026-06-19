@@ -1,5 +1,17 @@
 # DONE
 
+## Chat 本地优先与工具调用稳定化
+
+完成时间：2026-06-19
+
+本次基于 OpenSpec change `stabilize-chat-local-first-tool-loop` 完成 chat Agent 第一阶段稳定化：
+
+- `ChatAgentRuntime` 在自然语言进入 LLM Planner 前增加本地优先规则；本地库检索走 `list_papers`，已选论文问题走 `read_paper_context`，明确论文名的问题先走 `select_paper`。
+- `argupaper.tools` registry 新增 schema-aware tool specs，ReAct prompt 现在可以看到工具名、描述、参数字段和必填字段。
+- 工具调用前统一归一化常见参数别名，例如 `select_paper({"query": "BackdoorAgent"})` 会归一化为 `{"paper": "BackdoorAgent"}`。
+- 同一轮 ReAct 中相同 `tool + canonical_json(arguments)` 的重复调用会被阻止并写入 `duplicate_tool_call_blocked` 日志事件。
+- 本次不实现 LLM responder；`read_paper_context` 后仍沿用现有 `_respond()` observation 摘要行为。
+
 ## Chat Prompt 统一目录
 
 完成时间：2026-06-19
