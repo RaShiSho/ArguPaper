@@ -2,6 +2,26 @@
 
 本文件是项目唯一的手工 smoke 验收入口。
 
+## Chat 论文全文读取
+
+- 功能名称：`argupaper chat` 读取本地论文全文
+- 适用场景：验证自然语言全文请求会调用 `read_paper_fulltext`，最终回答不直接刷屏打印完整 markdown，日志不保存全文内容
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在 BackdoorAgent 相关记录；如需 responder 总结，已配置可用的 `LLM_PROVIDER__DEFAULT__*`
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper chat --help
+uv run argupaper chat
+/use BackdoorAgent
+返回这篇论文全文
+基于全文详细讲讲这篇论文
+/exit
+```
+
+- 预期结果：日志中出现 `read_paper_fulltext`；最终回答包含本地 `paper.md` 路径、字符数、hash 或读取状态，不应直接输出完整论文 markdown；JSONL 的 `tool_observation` 不包含原始 `markdown` / `report` 字段，应包含 `content_sha256`、`char_count`、`paper_path`、`truncated` 与 redaction 标记；LLM 不可用时仍返回工具摘要和路径。
+- 记录：___
+
 ## Chat 本地优先与工具调用稳定化
 
 - 功能名称：`argupaper chat` 本地优先与 ReAct 工具调用防重复

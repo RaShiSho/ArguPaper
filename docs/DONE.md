@@ -1,5 +1,16 @@
 # DONE
 
+## Chat 论文全文读取工具
+
+完成时间：2026-06-19
+
+本次基于 OpenSpec change `add-read-paper-fulltext-tool` 为 chat Agent 增加本地论文全文读取能力：
+
+- 新增共享工具 `read_paper_fulltext`，从 PaperStore 读取本地 `paper.md`，默认返回完整 markdown 到 Agent runtime 内存。
+- 用户明确要求“全文 / 完整 / 详细 / 逐节 / 具体内容”时，chat 可优先使用全文工具；普通概览仍保留 `read_paper_context` 摘录路径。
+- CLI 最终回答默认不打印完整 markdown，而是给出读取状态、字符数、hash 和本地 `paper.md` 路径。
+- chat JSONL 日志对全文 observation 脱敏，不保存原始 `markdown` / `report` 内容。
+
 ## Chat Respond LLM 总结
 
 完成时间：2026-06-19

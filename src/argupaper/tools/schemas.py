@@ -50,10 +50,27 @@ class ReadPaperContextArgs(BaseModel):
     max_chars: int = Field(default=6000, ge=500, le=20000)
 
 
+class ReadPaperFullTextArgs(BaseModel):
+    """Arguments for reading selected paper full markdown."""
+
+    paper_id: str | None = Field(default=None, description="Paper id. Defaults to selected paper.")
+    max_chars: int | None = Field(
+        default=None,
+        ge=1,
+        le=500000,
+        description="Optional maximum characters to return from paper markdown.",
+    )
+    include_report: bool = Field(
+        default=False,
+        description="Whether to include the local analysis report text when available.",
+    )
+
+
 __all__ = [
     "AnalyzePaperArgs",
     "ListPapersArgs",
     "ReadPaperContextArgs",
+    "ReadPaperFullTextArgs",
     "SearchPapersArgs",
     "SelectPaperArgs",
     "ToolResult",

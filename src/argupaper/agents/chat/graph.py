@@ -383,7 +383,11 @@ class ChatAgentRuntime:
         observation = await self.toolbox.ainvoke(tool_name, arguments)
         self.logger.write(
             "tool_observation",
-            {"run_id": state["run_id"], "tool": tool_name, "observation": observation},
+            {
+                "run_id": state["run_id"],
+                "tool": tool_name,
+                "observation": self._redact_observation_for_log(observation),
+            },
         )
         observations = [*state.get("observations", []), observation]
         tool_calls = [
@@ -537,7 +541,8 @@ class ChatAgentRuntime:
 
     def _format_observations_for_response(self, observations: list[dict[str, Any]]) -> str:
         compact = [self._compact_observation_for_response(item) for item in observations[-6:]]
-        return self._truncate_text(json.dumps(compact, ensure_ascii=False, indent=2), 24000)
+        limit = 120000 if any(item.get("tool") == "read_paper_fulltext" for item in observations) else 24000
+        return self._truncate_text(json.dumps(compact, ensure_ascii=False, indent=2), limit)
 
     def _compact_observation_for_response(self, observation: dict[str, Any]) -> dict[str, Any]:
         tool = str(observation.get("tool", ""))
@@ -554,6 +559,29 @@ class ChatAgentRuntime:
                 "markdown_excerpt": self._truncate_text(str(data.get("markdown_excerpt", "")), 9000),
                 "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 7000),
             }
+        elif tool == "read_paper_fulltext":
+            markdown = str(data.get("markdown", ""))
+            report = str(data.get("report", ""))
+            compact["data"] = {
+                "metadata": data.get("metadata", {}),
+                "char_count": data.get("char_count"),
+                "returned_char_count": data.get("returned_char_count"),
+                "truncated": data.get("truncated"),
+                "paper_path": data.get("paper_path"),
+                "content_sha256": data.get("content_sha256"),
+                "markdown": self._truncate_text(markdown, 90000),
+                "markdown_prompt_truncated": len(markdown.strip()) > 90000,
+            }
+            if "report" in data:
+                compact["data"].update(
+                    {
+                        "report": self._truncate_text(report, 25000),
+                        "report_char_count": data.get("report_char_count"),
+                        "returned_report_char_count": data.get("returned_report_char_count"),
+                        "report_truncated": data.get("report_truncated"),
+                        "report_prompt_truncated": len(report.strip()) > 25000,
+                    }
+                )
         elif tool == "analyze_paper":
             compact["data"] = {
                 "paper_id": data.get("paper_id"),
@@ -581,6 +609,21 @@ class ChatAgentRuntime:
         else:
             compact["data"] = self._truncate_text(json.dumps(data, ensure_ascii=False), 6000)
         return compact
+
+    def _redact_observation_for_log(self, observation: dict[str, Any]) -> dict[str, Any]:
+        if str(observation.get("tool", "")) != "read_paper_fulltext":
+            return observation
+        redacted = dict(observation)
+        data = dict(redacted.get("data", {}) or {})
+        markdown_present = "markdown" in data
+        report_present = "report" in data
+        data.pop("markdown", None)
+        data.pop("report", None)
+        data["markdown_redacted"] = markdown_present
+        if report_present:
+            data["report_redacted"] = True
+        redacted["data"] = data
+        return redacted
 
     def _format_warnings(self, warnings: list[str]) -> str:
         cleaned = [str(item).strip() for item in warnings if str(item).strip()]
@@ -643,16 +686,23 @@ class ChatAgentRuntime:
             }
         if not self._is_paper_content_request(user_input):
             return None
+        content_tool = "read_paper_fulltext" if self._is_fulltext_request(user_input) else "read_paper_context"
+        content_goal = "read_fulltext_after_select" if content_tool == "read_paper_fulltext" else "read_context_after_select"
+        content_plan = (
+            "Local-first: read the selected PaperStore record full text."
+            if content_tool == "read_paper_fulltext"
+            else "Local-first: read the selected PaperStore record context."
+        )
         if self._mentions_current_paper(user_input) and self._selected_dict(selected):
             return {
                 "goal": "read_selected",
-                "plan": "Local-first: read the selected PaperStore record context.",
-                "action": {"action": "tool_call", "tool": "read_paper_context", "arguments": {}},
+                "plan": content_plan,
+                "action": {"action": "tool_call", "tool": content_tool, "arguments": {}},
             }
         paper_query = self._extract_local_paper_query(user_input)
         if paper_query:
             return {
-                "goal": "read_context_after_select",
+                "goal": content_goal,
                 "plan": "Local-first: select a matching saved PaperStore record before considering external search.",
                 "action": {
                     "action": "tool_call",
@@ -663,8 +713,8 @@ class ChatAgentRuntime:
         if self._selected_dict(selected):
             return {
                 "goal": "read_selected",
-                "plan": "Local-first: read the selected PaperStore record context.",
-                "action": {"action": "tool_call", "tool": "read_paper_context", "arguments": {}},
+                "plan": content_plan,
+                "action": {"action": "tool_call", "tool": content_tool, "arguments": {}},
             }
         return None
 
@@ -678,16 +728,17 @@ class ChatAgentRuntime:
         last_tool = str(last.get("tool", ""))
         if goal == "list_local":
             return {"final_response": self._format_observation_response(last), "route": "respond"}
-        if goal == "read_selected" and last_tool == "read_paper_context":
+        if goal == "read_selected" and last_tool in {"read_paper_context", "read_paper_fulltext"}:
             return {"route": "respond"}
-        if goal == "read_context_after_select":
-            if last_tool == "read_paper_context":
+        if goal in {"read_context_after_select", "read_fulltext_after_select"}:
+            next_tool = "read_paper_fulltext" if goal == "read_fulltext_after_select" else "read_paper_context"
+            if last_tool == next_tool:
                 return {"route": "respond"}
             if last_tool == "select_paper" and last.get("ok", False):
                 return {
                     "pending_action": {
                         "action": "tool_call",
-                        "tool": "read_paper_context",
+                        "tool": next_tool,
                         "arguments": {},
                     },
                     "route": "tool_executor",
@@ -758,6 +809,10 @@ class ChatAgentRuntime:
             "介绍",
             "相关信息",
             "具体内容",
+            "全文",
+            "完整",
+            "详细",
+            "逐节",
             "讲了什么",
             "说了什么",
             "这篇论文",
@@ -766,6 +821,31 @@ class ChatAgentRuntime:
             "selected paper",
             "tell me about",
             "summarize",
+            "full text",
+            "fulltext",
+            "complete paper",
+            "entire paper",
+            "full paper",
+            "in detail",
+        ]
+        return any(marker in text for marker in markers)
+
+    def _is_fulltext_request(self, user_input: str) -> bool:
+        text = user_input.lower()
+        markers = [
+            "全文",
+            "完整",
+            "完整阅读",
+            "详细",
+            "逐节",
+            "具体内容",
+            "full text",
+            "fulltext",
+            "complete paper",
+            "entire paper",
+            "full paper",
+            "section by section",
+            "in detail",
         ]
         return any(marker in text for marker in markers)
 
@@ -820,7 +900,7 @@ def default_paper_id(
 ) -> dict[str, Any]:
     """Fill paper_id from the selected paper when a tool omitted it."""
 
-    if tool_name not in {"read_paper_context", "analyze_paper"}:
+    if tool_name not in {"read_paper_context", "read_paper_fulltext", "analyze_paper"}:
         return arguments
     if arguments.get("paper_id") or selected_paper is None:
         return arguments

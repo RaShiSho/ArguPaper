@@ -208,6 +208,11 @@ _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
         "paper": "paper_id",
         "name": "paper_id",
     },
+    "read_paper_fulltext": {
+        "id": "paper_id",
+        "paper": "paper_id",
+        "name": "paper_id",
+    },
     "analyze_paper": {
         "id": "paper_id",
         "paper": "paper_id",

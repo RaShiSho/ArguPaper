@@ -236,7 +236,9 @@ uv run argupaper chat
 - `/analyze`：对当前 selected paper 调用 `AnalyzeWorkflow` tool。
 - `/exit`：退出当前 chat 进程。
 
-LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct 工具循环，例如搜索论文、读取当前论文上下文并回答问题。工具返回上下文后，`respond` 节点会基于 observations 生成最终回答；如果 responder LLM 调用失败，则回退为工具摘要。LLM 不可用时，自然语言会降级提示；slash commands 仍可使用。
+LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct 工具循环，例如搜索论文、读取当前论文上下文、读取本地 `paper.md` 全文并回答问题。工具返回上下文后，`respond` 节点会基于 observations 生成最终回答；如果 responder LLM 调用失败，则回退为工具摘要。LLM 不可用时，自然语言会降级提示；slash commands 仍可使用。
+
+当用户明确要求“全文 / 完整 / 详细 / 逐节 / 具体内容”时，chat Agent 可调用 `read_paper_fulltext` 读取本地论文全文。CLI 默认不会直接打印完整 markdown，而是返回读取状态、字符数、hash 与本地 `paper.md` 路径。
 
 运行日志写入：
 
@@ -248,4 +250,4 @@ CHAT_LOG_PATH=./data/logs/chat
 
 `argupaper chat` now builds its LangGraph tool loop from the shared `argupaper.tools` registry. To add future Agent-callable tools, implement and register them under `src/argupaper/tools/`, then include them in `build_default_tool_registry()`. The chat graph keeps conversation state and selected-paper argument injection, while existing workflows remain wrapped as tools.
 
-未配置 `CHAT_LOG_PATH` 时默认写入 `LOG_PATH/chat`。日志为 JSONL 审计记录，包含 state transition、planner decision、tool call、observation、warning、interrupt 和 final response 摘要；当前不支持从日志恢复对话。
+未配置 `CHAT_LOG_PATH` 时默认写入 `LOG_PATH/chat`。日志为 JSONL 审计记录，包含 state transition、planner decision、tool call、observation、warning、interrupt 和 final response 摘要；`read_paper_fulltext` 的日志会脱敏，不保存原始 `markdown` / `report` 全文；当前不支持从日志恢复对话。

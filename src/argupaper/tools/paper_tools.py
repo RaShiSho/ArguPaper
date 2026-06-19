@@ -5,12 +5,19 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Any
 
 from argupaper.config import Config
 from argupaper.memory.paper_store import PaperStore
 from argupaper.tools.registry import ToolRegistry
-from argupaper.tools.schemas import ListPapersArgs, ReadPaperContextArgs, SelectPaperArgs, ToolResult
+from argupaper.tools.schemas import (
+    ListPapersArgs,
+    ReadPaperContextArgs,
+    ReadPaperFullTextArgs,
+    SelectPaperArgs,
+    ToolResult,
+)
 from argupaper.workflows.papers import PapersOptions, PapersWorkflow
 
 ProgressCallback = Callable[[str], None] | None
@@ -42,6 +49,12 @@ def register_paper_tools(
         "Read metadata, structured summary, markdown excerpt, and report excerpt for a paper.",
         toolbox.read_paper_context,
         args_schema=ReadPaperContextArgs,
+    )
+    registry.register(
+        "read_paper_fulltext",
+        "Read the full local paper markdown from PaperStore; use for explicit full-text or detailed paper requests.",
+        toolbox.read_paper_fulltext,
+        args_schema=ReadPaperFullTextArgs,
     )
 
 
@@ -176,6 +189,80 @@ class PaperToolbox:
             },
         )
 
+    async def read_paper_fulltext(
+        self,
+        paper_id: str | None = None,
+        max_chars: int | None = None,
+        include_report: bool = False,
+    ) -> ToolResult:
+        """Read full paper markdown from PaperStore."""
+
+        if not paper_id:
+            return ToolResult(
+                tool="read_paper_fulltext",
+                ok=False,
+                summary="No paper is selected. Use /use <paper-id-or-name> first.",
+                data={},
+            )
+        self._progress(f"Reading full paper text for {paper_id}...")
+        record = await self.paper_store.get_paper(paper_id)
+        if record is None:
+            return ToolResult(
+                tool="read_paper_fulltext",
+                ok=False,
+                summary=f"Saved paper record not found: {paper_id}",
+                data={},
+            )
+
+        metadata = self._record_metadata(record)
+        resolved_paper_id = str(metadata.get("paper_id", paper_id))
+        markdown = str(record.get("markdown", ""))
+        if not markdown:
+            return ToolResult(
+                tool="read_paper_fulltext",
+                ok=False,
+                summary=f"Saved paper full text not found: {resolved_paper_id}",
+                data={"metadata": metadata},
+            )
+
+        returned_markdown, truncated = self._limit_text(markdown, max_chars)
+        paper_path = self.paper_store.storage_path / resolved_paper_id / "paper.md"
+        content_hash = sha256(markdown.encode("utf-8")).hexdigest()
+        data: dict[str, Any] = {
+            "metadata": metadata,
+            "markdown": returned_markdown,
+            "char_count": len(markdown),
+            "returned_char_count": len(returned_markdown),
+            "truncated": truncated,
+            "paper_path": str(paper_path.resolve()),
+            "content_sha256": content_hash,
+        }
+
+        if include_report:
+            report = str(record.get("report", ""))
+            returned_report, report_truncated = self._limit_text(report, max_chars)
+            data.update(
+                {
+                    "report": returned_report,
+                    "report_char_count": len(report),
+                    "returned_report_char_count": len(returned_report),
+                    "report_truncated": report_truncated,
+                }
+            )
+
+        limit_text = f", returned {len(returned_markdown)} chars" if truncated else ""
+        return ToolResult(
+            tool="read_paper_fulltext",
+            ok=True,
+            summary=(
+                f"Loaded full text for {resolved_paper_id}: "
+                f"{metadata.get('title', 'Untitled')} "
+                f"({len(markdown)} chars{limit_text}; path: {data['paper_path']}; "
+                f"sha256: {content_hash[:12]}; truncated: {str(truncated).lower()})."
+            ),
+            data=data,
+        )
+
     async def _search_local_records(
         self,
         query: str,
@@ -305,6 +392,11 @@ class PaperToolbox:
         if len(normalized) <= limit:
             return normalized
         return normalized[: limit - 3].rstrip() + "..."
+
+    def _limit_text(self, text: str, limit: int | None) -> tuple[str, bool]:
+        if limit is None or len(text) <= limit:
+            return text, False
+        return text[:limit], True
 
 
 __all__ = ["PaperToolbox", "register_paper_tools"]

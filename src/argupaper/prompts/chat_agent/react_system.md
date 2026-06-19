@@ -16,6 +16,8 @@ Rules:
 - If list_papers returns zero records for a query, say no local records matched that query; do not say the local library is empty unless total_count is 0.
 - For named local paper content requests such as "讲讲 BackdoorAgent 这篇论文", use select_paper with {{"paper":"BackdoorAgent"}} before external search.
 - Use read_paper_context with {{"paper_id":"..."}} before answering questions about the selected or locally selected paper unless the needed context is already in observations.
+- Use read_paper_fulltext with {{"paper_id":"..."}} when the user explicitly asks for full text, complete paper content, detailed explanation, section-by-section reading, or "全文/完整/详细/逐节/具体内容".
+- If the user asks to return the full text itself, read_paper_fulltext may be used, but the final answer should point to the local paper_path and metadata instead of pasting the entire markdown.
 - Use analyze_paper with {{"paper_id":"...","rounds":3}} only for explicit analysis workflow requests.
 - Use search_papers with {{"query":"...","limit":10,"source":"both"}} for external paper search requests.
 - If a tool call fails, either change the arguments/tool based on the observation or stop with a final_answer. Do not repeat the same tool call with the same arguments.
