@@ -127,7 +127,7 @@ def format_warnings(warnings: list[str]) -> None:
 
 
 def format_analyze_summary(result: AnalyzeWorkflowResult) -> None:
-    """Display concise analyze workflow metadata."""
+    """Display concise debate workflow metadata."""
 
     summary = Text()
     summary.append(f"Paper ID: {result.paper_id}\n", style="cyan")
@@ -136,7 +136,7 @@ def format_analyze_summary(result: AnalyzeWorkflowResult) -> None:
         f"Supplementary retrieval: {'used' if result.supplementary_search_used else 'not used'}",
         style="cyan",
     )
-    console.print(Panel(summary, title="[bold]Analysis Summary[/bold]", expand=False))
+    console.print(Panel(summary, title="[bold]Debate Summary[/bold]", expand=False))
 
 
 def format_paper_records(records: list[dict[str, Any]]) -> None:

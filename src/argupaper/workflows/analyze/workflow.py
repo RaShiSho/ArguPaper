@@ -163,7 +163,7 @@ class AnalyzeWorkflow:
             warnings=[
                 "Legacy PDF analyze input is supported for compatibility. "
                 f"Recommended workflow: `argupaper convert \"{paper_path}\"` then "
-                f"`argupaper analyze \"{paper_path.stem}\"`."
+                f"`argupaper debate \"{paper_path.stem}\"`."
             ],
         )
 

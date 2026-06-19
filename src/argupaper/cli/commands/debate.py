@@ -1,4 +1,4 @@
-"""Analyze CLI command."""
+"""Debate CLI command."""
 
 from pathlib import Path
 from typing import Optional
@@ -24,7 +24,7 @@ from argupaper.cli.formatters import (
 from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow, InputValidationError
 
 
-def analyze(
+def debate(
     paper: str = typer.Argument(..., help="Converted paper name, cache key, or legacy local PDF path"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     save_report: bool = typer.Option(
@@ -36,33 +36,34 @@ def analyze(
     force: bool = typer.Option(False, "--force", "-f", help="Force reconvert even if cached"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
-    """Analyze a research paper with multi-agent debate."""
+    """Run multi-agent debate analysis for a research paper."""
 
     try:
         if paper.startswith(("http://", "https://")):
             raise InputValidationError(
-                "URL analysis is not part of the MVP CLI. Please use a converted paper name or local PDF path."
+                "URL debate analysis is not part of the MVP CLI. "
+                "Please use a converted paper name or local PDF path."
             )
         if rounds <= 0:
             raise InputValidationError("--rounds must be greater than 0.")
 
         paper_path = Path(paper)
-        analyze_options: dict[str, object]
+        debate_options: dict[str, object]
         if paper_path.exists():
             if paper_path.suffix.lower() != ".pdf":
                 raise InputValidationError("Input must be a converted paper name or a .pdf file.")
-            analyze_options = {"paper_path": paper_path}
+            debate_options = {"paper_path": paper_path}
         else:
-            analyze_options = {"paper_name": paper}
+            debate_options = {"paper_name": paper}
 
         output_path = resolve_analyze_output_path(output)
         if output_path is None and save_report:
             output_path = resolve_auto_report_path(Path(paper))
 
-        _run_analyze(
+        _run_debate(
             workflow=build_analyze_workflow(),
             options=AnalyzeOptions(
-                **analyze_options,
+                **debate_options,
                 output_path=output_path,
                 rounds=rounds,
                 force_reconvert=force,
@@ -74,8 +75,8 @@ def analyze(
         raise typer.Exit(code=1)
 
 
-def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
-    """Run the analysis workflow synchronously."""
+def _run_debate(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
+    """Run the multi-agent debate workflow synchronously."""
 
     with Progress(
         SpinnerColumn(SPINNER_NAME),
@@ -83,7 +84,7 @@ def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
         TaskProgressColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("[cyan]Preparing analysis...", total=None)
+        task = progress.add_task("[cyan]Preparing debate analysis...", total=None)
 
         def progress_callback(message: str) -> None:
             progress.update(task, description=f"[cyan]{message}")
@@ -91,7 +92,7 @@ def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
         result = workflow.run_sync(options, progress_callback)
         progress.update(task, completed=True)
 
-    console.print(format_success("Analysis complete"))
+    console.print(format_success("Debate analysis complete"))
     if result.from_cache:
         console.print("[dim]Result loaded from cache (use --force to reconvert)[/dim]\n")
 
@@ -110,5 +111,4 @@ def _run_analyze(workflow: AnalyzeWorkflow, options: AnalyzeOptions) -> None:
     console.print(render_markdown(result.report_markdown))
 
 
-__all__ = ["analyze"]
-
+__all__ = ["debate"]

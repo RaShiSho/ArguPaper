@@ -6,7 +6,7 @@
 
 - `argupaper search "<query>"`：检索论文
 - `argupaper convert <local.pdf>`：将本地 PDF 转换为 Markdown 并写入缓存
-- `argupaper analyze <paper-name>`：基于已缓存 Markdown 分析论文
+- `argupaper debate <paper-name>`：基于已缓存 Markdown 运行多 Agent 辩论式论文分析
 - `argupaper papers`：查看本地已保存的论文分析记录
 
 同时新增本地 React 工作台，可视化使用上述能力。
@@ -58,7 +58,7 @@ LOG_PATH=./data/logs
 
 说明：
 
-- `MINERU_API_KEY`：运行 `argupaper convert` 或 legacy PDF analyze 时必需；按论文名分析已缓存 Markdown 时不需要。
+- `MINERU_API_KEY`：运行 `argupaper convert` 或 legacy PDF debate 时必需；按论文名辩论分析已缓存 Markdown 时不需要。
 - `MINERU_API_ENDPOINT`：建议使用 MinerU 官方精准解析 API：`https://mineru.net/api/v4/extract/task`。
 - `NGROK_URL_BASE`：仅在使用非标准 URL 解析 endpoint 时需要；默认官方 endpoint 会走本地文件签名上传链路，不依赖 ngrok。
 - `PAPER_STORAGE_PATH`：本地论文记录保存目录；未配置时默认为 `DATA_PATH/papers`。
@@ -84,11 +84,11 @@ SEARCH_MAX_RESULTS=20
 ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 ```
 
-### Analyze Debate
+### Debate Analysis
 
-`argupaper analyze` 的 Support/Skeptic debate 已使用 LangChain `ChatPromptTemplate` + LCEL Runnable 编排，LLM 接入仍复用现有 `LLM_PROVIDER__DEFAULT__*` 配置，不需要新增 `langchain-openai` 或 OpenAI SDK。
+`argupaper debate` 的 Support/Skeptic 多 Agent 辩论已使用 LangChain `ChatPromptTemplate` + LCEL Runnable 编排，LLM 接入仍复用现有 `LLM_PROVIDER__DEFAULT__*` 配置，不需要新增 `langchain-openai` 或 OpenAI SDK。
 
-如果默认 LLM provider 未配置、请求失败或返回空内容，debate 会自动降级到确定性规则输出，并在 analyze warnings 中说明降级原因；Search workflow 不受此变更影响。
+如果默认 LLM provider 未配置、请求失败或返回空内容，debate 会自动降级到确定性规则输出，并在 warnings 中说明降级原因；Search workflow 不受此变更影响。
 
 ## 启动
 
@@ -162,22 +162,22 @@ uv run argupaper convert -d ./papers --force
 - 目录模式不支持 `--output`；转换结果默认写入现有 `data/cache` Markdown 缓存。
 - 每次目录转换会在 `data/logs/convert/<run-id>.jsonl` 写入执行日志，记录成功、缓存命中、失败、跳过和最终汇总。
 
-基于已转换 Markdown 分析论文：
+基于已转换 Markdown 运行多 Agent 辩论式论文分析：
 
 ```bash
-uv run argupaper analyze "paper" --output 1.md --rounds 2
+uv run argupaper debate "paper" --output 1.md --rounds 2
 ```
 
 自动按论文文件名保存报告：
 
 ```bash
-uv run argupaper analyze "paper" --save-report
+uv run argupaper debate "paper" --save-report
 ```
 
 运行前请确认：
 
 - 先执行过 `argupaper convert ./paper.pdf`，使 `data/cache` 中存在对应 Markdown 与 metadata
-- 只有执行 `convert` 或 legacy PDF analyze 时才需要配置 `MINERU_API_KEY` 与 `MINERU_API_ENDPOINT`
+- 只有执行 `convert` 或 legacy PDF debate 时才需要配置 `MINERU_API_KEY` 与 `MINERU_API_ENDPOINT`
 - 执行 `convert` 时当前网络可访问 MinerU API 与其返回的签名上传 URL
 
 查看本地历史记录：
@@ -204,7 +204,7 @@ uv run argupaper --version
 
 - `convert` 当前只支持本地 PDF，不支持直接传 URL
 - `convert --folder <dir>` 支持目录批量转换，目录短参数为 `-d`；`-f` 仍表示 `--force`
-- `analyze` 推荐传入已转换论文的原始文件名、文件名 stem 或 cache key；传入本地 PDF 路径仍兼容，但会提示迁移到 `convert -> analyze <paper-name>`
+- `debate` 推荐传入已转换论文的原始文件名、文件名 stem 或 cache key；传入本地 PDF 路径仍兼容，但会提示迁移到 `convert -> debate <paper-name>`
 - Web 工作台同样只支持上传本地 PDF，不支持 URL PDF
 - `--output 1.md` 这类裸文件名会自动保存到 `output/1.md`；显式目录或绝对路径会按用户传入路径保存
 - `--save-report` 会在未指定 `--output` 时自动保存到 `output/<论文文件名>.md`
@@ -221,7 +221,7 @@ uv run argupaper --version
 
 ## Chat Agent Runtime
 
-`argupaper chat` 是面向本地科研阅读的会话型 Agent 入口。它的主体逻辑位于 `argupaper.agents.chat`，使用 LangGraph 构建 Planner + ReAct Tool Loop + Agent State；`analyze`、`search`、`papers` 等现有 workflows 只作为可调用 tools 被封装，不承载 chat 主体逻辑。
+`argupaper chat` 是面向本地科研阅读的会话型 Agent 入口。它的主体逻辑位于 `argupaper.agents.chat`，使用 LangGraph 构建 Planner + ReAct Tool Loop + Agent State；`debate`、`search`、`papers` 等现有 workflows 只作为可调用 tools 被封装，不承载 chat 主体逻辑。
 
 启动：
 
@@ -233,10 +233,12 @@ uv run argupaper chat
 
 - `/papers`：通过 `PapersWorkflow` tool 列出本地 PaperStore。
 - `/use <paper-id-or-name>`：选择当前论文，后续自然语言问题会使用该 selected paper。
-- `/analyze`：对当前 selected paper 调用 `AnalyzeWorkflow` tool。
+- `/debate`：对当前 selected paper 调用多 Agent 辩论式论文分析 tool。
 - `/exit`：退出当前 chat 进程。
 
 LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct 工具循环，例如搜索论文、读取当前论文上下文、读取本地 `paper.md` 全文并回答问题。工具返回上下文后，`respond` 节点会基于 observations 生成最终回答；如果 responder LLM 调用失败，则回退为工具摘要。LLM 不可用时，自然语言会降级提示；slash commands 仍可使用。
+
+`debate` / `/debate` 只用于明确的多 Agent 辩论式论文分析请求，例如“使用多 agent 辩论分析此论文”“正反方分析这篇论文”。普通论文解读、摘要、全文解释和问答由 chat 的阅读工具与 `respond` 节点处理。
 
 当用户明确要求“全文 / 完整 / 详细 / 逐节 / 具体内容”时，chat Agent 可调用 `read_paper_fulltext` 读取本地论文全文。CLI 默认不会直接打印完整 markdown，而是返回读取状态、字符数、hash 与本地 `paper.md` 路径。
 

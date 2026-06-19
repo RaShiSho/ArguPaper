@@ -28,8 +28,8 @@ class SelectPaperArgs(BaseModel):
     paper: str = Field(description="Paper id, unique id prefix, title, source, or search text.")
 
 
-class AnalyzePaperArgs(BaseModel):
-    """Arguments for analyzing one paper."""
+class DebatePaperArgs(BaseModel):
+    """Arguments for running multi-agent debate analysis for one paper."""
 
     paper_id: str | None = Field(default=None, description="Paper id. Defaults to selected paper.")
     rounds: int = Field(default=3, ge=1, le=8)
@@ -67,7 +67,7 @@ class ReadPaperFullTextArgs(BaseModel):
 
 
 __all__ = [
-    "AnalyzePaperArgs",
+    "DebatePaperArgs",
     "ListPapersArgs",
     "ReadPaperContextArgs",
     "ReadPaperFullTextArgs",

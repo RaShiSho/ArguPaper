@@ -135,56 +135,56 @@ uv run argupaper chat
 - 预期结果：命令显示逐文件处理进度；PDF 被转换或命中缓存；非 PDF 文件与子目录被跳过；最终汇总包含 total、processed、succeeded、cache、failed、skipped；`data/logs/convert/` 下生成对应 JSONL 日志
 - 记录：____
 
-### 7. 本地 Markdown 分析主链路
+### 7. 本地 Markdown 多 Agent 辩论分析主链路
 
-- 功能名称：本地 Markdown 分析
-- 适用场景：验证 `analyze` 可按已转换论文名读取缓存 Markdown 并生成报告
+- 功能名称：本地 Markdown 多 Agent 辩论分析
+- 适用场景：验证 `debate` 可按已转换论文名读取缓存 Markdown 并生成多 Agent 辩论报告
 - 前置条件：已先执行 `uv run argupaper convert ./paper.pdf`
-- 执行命令：`uv run argupaper analyze "paper" --output 1.md --rounds 2`
+- 执行命令：`uv run argupaper debate "paper" --output 1.md --rounds 2`
 - 预期结果：不重新提交 MinerU 转换任务；成功生成 Markdown 报告，裸文件名输出自动保存到 `output/1.md`；报告中应能看到与当前轮数一致的 debate 输出；若下游阶段异常，应给出可见错误或 warning，而不是静默失败
 - 记录：____
 
-### 8. Analyze 自动报告保存
+### 8. Debate 自动报告保存
 
-- 功能名称：Analyze 自动报告保存
+- 功能名称：Debate 自动报告保存
 - 适用场景：验证未显式传入 `--output` 时，可按论文文件名自动保存报告
 - 前置条件：已先执行 `uv run argupaper convert ./paper.pdf`
-- 执行命令：`uv run argupaper analyze "paper" --save-report`
+- 执行命令：`uv run argupaper debate "paper" --save-report`
 - 预期结果：成功生成 Markdown 报告，并自动保存到 `output/paper.md`
 - 记录：____
 
-### 9. Analyze 缓存未命中提示
+### 9. Debate 缓存未命中提示
 
-- 功能名称：Analyze 缓存未命中提示
+- 功能名称：Debate 缓存未命中提示
 - 适用场景：验证按论文名分析未转换论文时不会静默调用 MinerU
 - 前置条件：确认 cache 中不存在名为 `unknown-paper` 的记录
-- 执行命令：`uv run argupaper analyze "unknown-paper"`
+- 执行命令：`uv run argupaper debate "unknown-paper"`
 - 预期结果：命令失败并提示未找到已转换 Markdown，要求先运行 `argupaper convert <pdf>`
 - 记录：____
 
-### 10. Analyze 缓存歧义提示
+### 10. Debate 缓存歧义提示
 
-- 功能名称：Analyze 缓存歧义提示
+- 功能名称：Debate 缓存歧义提示
 - 适用场景：验证多个缓存记录匹配同一论文名时不会自动选择
 - 前置条件：本地 cache 中已存在两个文件名相近、都能匹配同一查询词的转换记录
-- 执行命令：`uv run argupaper analyze "paper"`
+- 执行命令：`uv run argupaper debate "paper"`
 - 预期结果：命令失败并列出候选 original filename 与 cache key，要求输入更精确名称或 cache key
 - 记录：____
 
-### 11. Legacy PDF Analyze 兼容
+### 11. Legacy PDF Debate 兼容
 
-- 功能名称：Legacy PDF Analyze 兼容
+- 功能名称：Legacy PDF Debate 兼容
 - 适用场景：验证旧的 PDF 输入仍可运行但会提示迁移
 - 前置条件：已配置 `MINERU_API_KEY`、`MINERU_API_ENDPOINT=https://mineru.net/api/v4/extract/task`；准备一个本地 PDF 文件
-- 执行命令：`uv run argupaper analyze ./paper.pdf --rounds 2`
-- 预期结果：命令仍可生成报告；warning 中包含推荐先运行 `argupaper convert` 再运行 `argupaper analyze <paper-name>` 的提示
+- 执行命令：`uv run argupaper debate ./paper.pdf --rounds 2`
+- 预期结果：命令仍可生成报告；warning 中包含推荐先运行 `argupaper convert` 再运行 `argupaper debate <paper-name>` 的提示
 - 记录：____
 
 ### 12. 本地论文历史记录读取
 
 - 功能名称：PaperStore 历史记录读取
 - 适用场景：验证 `argupaper papers` 可列出、搜索并读取本地记录
-- 前置条件：已完成至少一次成功的 analyze，并已保存报告
+- 前置条件：已完成至少一次成功的 debate，并已保存报告
 - 执行命令：
 
 ```powershell
@@ -200,7 +200,7 @@ uv run argupaper papers --query paper
 - 功能名称：用户可读错误面板
 - 适用场景：验证 CLI 参数错误会显示明确错误类型与下一步提示
 - 前置条件：已执行 `uv sync`；准备一个非 PDF 文件，例如 `not-pdf.txt`
-- 执行命令：`uv run argupaper analyze ./not-pdf.txt`
+- 执行命令：`uv run argupaper debate ./not-pdf.txt`
 - 预期结果：命令失败；错误面板包含错误类型、错误原因和下一步提示，不出现 Python traceback
 - 记录：____
 
@@ -310,7 +310,7 @@ npm run dev:log
 ```powershell
 uv run argupaper --help
 uv run argupaper convert --help
-uv run argupaper analyze --help
+uv run argupaper debate --help
 uv run argupaper search --help
 uv run argupaper papers --help
 ```
@@ -329,7 +329,7 @@ uv run argupaper convert .\sample.pdf
 uv run argupaper papers
 uv run argupaper papers <paper_id> --markdown
 uv run argupaper convert .\sample.pdf
-uv run argupaper analyze sample
+uv run argupaper debate sample
 uv run argupaper papers
 ```
 
@@ -348,11 +348,11 @@ uv run argupaper papers
 uv run argupaper chat
 /papers
 /use <paper_id_or_title>
-/analyze
+/debate
 /exit
 ```
 
-- 预期结果：chat 面板启动成功；`/papers` 列出 PaperStore 记录；`/use` 更新 selected paper；`/analyze` 调用现有 AnalyzeWorkflow 并显示阶段动作；`/exit` 正常退出；`data/logs/chat/` 下生成 JSONL 日志
+- 预期结果：chat 面板启动成功；`/papers` 列出 PaperStore 记录；`/use` 更新 selected paper；`/debate` 调用多 Agent 辩论式论文分析并显示阶段动作；`/exit` 正常退出；`data/logs/chat/` 下生成 JSONL 日志
 - 记录：____
 
 ### 24. Chat 自然语言与降级
@@ -377,7 +377,7 @@ uv run argupaper chat
 - 前置条件：已配置可运行的 analyze 场景，并已在 chat 中 `/use` 一篇论文
 - 执行步骤：
   1. 运行 `uv run argupaper chat`
-  2. 输入 `/analyze`
+  2. 输入 `/debate`
   3. 任务运行时按 Esc
 - 预期结果：当前任务被请求取消，界面回到输入状态；`data/logs/chat/` 对应 JSONL 日志包含 interrupted 事件；不会保存可恢复对话
 - 记录：___
@@ -404,7 +404,7 @@ uv run argupaper chat
 ### 27. 论文真实标题入库
 
 - 功能名称：PaperStore 使用 Markdown 真实标题
-- 适用场景：验证 convert/analyze 写入 PaperStore 前会从论文 Markdown 正文解析真实标题，而不是直接使用 PDF 文件名
+- 适用场景：验证 convert/debate 写入 PaperStore 前会从论文 Markdown 正文解析真实标题，而不是直接使用 PDF 文件名
 - 前置条件：已执行 `uv sync`；已配置 `MINERU_API_KEY`；准备一个 PDF 文件名与正文标题不一致的样例，例如 `WTF.pdf`，其转换 Markdown 首行为 `# What the fuck`
 - 执行命令：
 
@@ -412,7 +412,7 @@ uv run argupaper chat
 uv run argupaper convert .\WTF.pdf
 uv run argupaper papers
 uv run argupaper papers <paper_id>
-uv run argupaper analyze <paper_id_or_cache_name> --rounds 1
+uv run argupaper debate <paper_id_or_cache_name> --rounds 1
 uv run argupaper papers <paper_id>
 ```
 

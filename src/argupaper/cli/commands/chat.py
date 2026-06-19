@@ -37,7 +37,7 @@ async def _run_chat() -> None:
     console.print(
         Panel(
             "ArguPaper Chat Agent Runtime\n"
-            "Commands: /papers, /use <paper-id-or-name>, /analyze, /exit\n"
+            "Commands: /papers, /use <paper-id-or-name>, /debate, /exit\n"
             "Natural language uses Planner + ReAct tools when LLM is configured.",
             title="[bold]argupaper chat[/bold]",
             border_style="cyan",

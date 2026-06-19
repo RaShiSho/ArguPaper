@@ -1,5 +1,16 @@
 # DONE
 
+## Analyze 用户入口重命名为 Debate
+
+完成时间：2026-06-19
+
+本次不创建 OpenSpec change，直接将当前用户可见的论文分析入口定位为多 Agent 辩论式论文分析：
+
+- CLI 入口从 `argupaper analyze` 改为 `argupaper debate`，旧 `analyze` 命令不再注册。
+- Chat slash command 从 `/analyze` 改为 `/debate`，并将 Agent tool 从 `analyze_paper` 改为 `debate_paper`。
+- `debate` 的职责定义为结构化抽取、证据检查、可选补充检索、Support/Skeptic 多轮辩论、共识/分歧判断与 Markdown 报告生成。
+- 普通论文讲解、全文解释和问答继续由 `read_paper_context` / `read_paper_fulltext` + `respond` 处理，不触发 `debate_paper`。
+
 ## Chat 论文全文读取工具
 
 完成时间：2026-06-19

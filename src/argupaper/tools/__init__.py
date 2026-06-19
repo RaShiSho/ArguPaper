@@ -3,7 +3,7 @@
 from argupaper.tools.factory import build_default_tool_registry, build_default_toolbox
 from argupaper.tools.registry import LangChainToolbox, RegisteredTool, ToolRegistry
 from argupaper.tools.schemas import (
-    AnalyzePaperArgs,
+    DebatePaperArgs,
     ListPapersArgs,
     ReadPaperContextArgs,
     ReadPaperFullTextArgs,
@@ -13,7 +13,7 @@ from argupaper.tools.schemas import (
 )
 
 __all__ = [
-    "AnalyzePaperArgs",
+    "DebatePaperArgs",
     "LangChainToolbox",
     "ListPapersArgs",
     "ReadPaperContextArgs",

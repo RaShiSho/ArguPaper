@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from argupaper.config import Config
 from argupaper.tools.registry import ToolRegistry
-from argupaper.tools.schemas import AnalyzePaperArgs, SearchPapersArgs, ToolResult
+from argupaper.tools.schemas import DebatePaperArgs, SearchPapersArgs, ToolResult
 from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow, SearchOptions
 from argupaper.workflows.search import InteractiveSearchWorkflow
 
@@ -23,10 +23,10 @@ def register_workflow_tools(
 
     toolbox = WorkflowToolbox(config, progress_callback=progress_callback)
     registry.register(
-        "analyze_paper",
-        "Run the existing AnalyzeWorkflow for a selected or explicit paper id.",
-        toolbox.analyze_paper,
-        args_schema=AnalyzePaperArgs,
+        "debate_paper",
+        "Run multi-agent debate analysis for a selected or explicit paper id using the existing workflow.",
+        toolbox.debate_paper,
+        args_schema=DebatePaperArgs,
     )
     registry.register(
         "search_papers",
@@ -43,26 +43,26 @@ class WorkflowToolbox:
         self.config = config
         self.progress_callback = progress_callback
 
-    async def analyze_paper(self, paper_id: str | None = None, rounds: int = 3) -> ToolResult:
-        """Run AnalyzeWorkflow for a converted paper."""
+    async def debate_paper(self, paper_id: str | None = None, rounds: int = 3) -> ToolResult:
+        """Run the multi-agent debate analysis workflow for a converted paper."""
 
         if not paper_id:
             return ToolResult(
-                tool="analyze_paper",
+                tool="debate_paper",
                 ok=False,
                 summary="No paper is selected. Use /use <paper-id-or-name> first.",
                 data={},
             )
-        self._progress(f"Running AnalyzeWorkflow for {paper_id}...")
+        self._progress(f"Running multi-agent debate analysis for {paper_id}...")
         workflow = AnalyzeWorkflow(self.config)
         result = await workflow.run(
             AnalyzeOptions(paper_name=paper_id, rounds=rounds),
             progress_callback=self._progress,
         )
         return ToolResult(
-            tool="analyze_paper",
+            tool="debate_paper",
             ok=True,
-            summary=f"Analysis complete for {result.paper_id}: {result.report_title}",
+            summary=f"Debate analysis complete for {result.paper_id}: {result.report_title}",
             data={
                 "paper_id": result.paper_id,
                 "report_title": result.report_title,

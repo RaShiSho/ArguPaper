@@ -491,7 +491,7 @@ class ChatAgentRuntime:
     async def _fallback(self, state: ChatAgentState) -> dict[str, Any]:
         reason = str(state.get("fallback_reason", "")).strip() or "Agent runtime could not continue."
         self.logger.write("fallback", {"run_id": state["run_id"], "reason": reason})
-        command_help = "LLM 自然语言 Agent 当前不可用。仍可使用：/papers、/use <paper-id-or-name>、/analyze、/exit。"
+        command_help = "LLM 自然语言 Agent 当前不可用。仍可使用：/papers、/use <paper-id-or-name>、/debate、/exit。"
         return {
             "final_response": f"{command_help}\n\n原因：{reason}",
             "warnings": [*state.get("warnings", []), reason],
@@ -515,8 +515,8 @@ class ChatAgentRuntime:
             if not argument:
                 return {"action": "tool_call", "tool": "select_paper", "arguments": {"paper": ""}}
             return {"action": "tool_call", "tool": "select_paper", "arguments": {"paper": argument}}
-        if normalized == "/analyze":
-            return {"action": "tool_call", "tool": "analyze_paper", "arguments": {"rounds": 3}}
+        if normalized == "/debate":
+            return {"action": "tool_call", "tool": "debate_paper", "arguments": {"rounds": 3}}
         return {
             "action": "tool_call",
             "tool": "unknown_slash_command",
@@ -582,7 +582,7 @@ class ChatAgentRuntime:
                         "report_prompt_truncated": len(report.strip()) > 25000,
                     }
                 )
-        elif tool == "analyze_paper":
+        elif tool == "debate_paper":
             compact["data"] = {
                 "paper_id": data.get("paper_id"),
                 "report_title": data.get("report_title"),
@@ -684,6 +684,25 @@ class ChatAgentRuntime:
                 "plan": "Local-first: search saved PaperStore records before any external search.",
                 "action": {"action": "tool_call", "tool": "list_papers", "arguments": arguments},
             }
+        if self._is_debate_request(user_input):
+            paper_query = self._extract_local_paper_query(user_input)
+            if paper_query:
+                return {
+                    "goal": "debate_after_select",
+                    "plan": "Local-first: select a matching saved PaperStore record before multi-agent debate analysis.",
+                    "action": {
+                        "action": "tool_call",
+                        "tool": "select_paper",
+                        "arguments": {"paper": paper_query},
+                    },
+                }
+            if self._selected_dict(selected):
+                return {
+                    "goal": "debate_selected",
+                    "plan": "Local-first: run multi-agent debate analysis for the selected PaperStore record.",
+                    "action": {"action": "tool_call", "tool": "debate_paper", "arguments": {"rounds": 3}},
+                }
+            return None
         if not self._is_paper_content_request(user_input):
             return None
         content_tool = "read_paper_fulltext" if self._is_fulltext_request(user_input) else "read_paper_context"
@@ -728,6 +747,20 @@ class ChatAgentRuntime:
         last_tool = str(last.get("tool", ""))
         if goal == "list_local":
             return {"final_response": self._format_observation_response(last), "route": "respond"}
+        if goal == "debate_selected" and last_tool == "debate_paper":
+            return {"final_response": self._format_observation_response(last), "route": "respond"}
+        if goal == "debate_after_select":
+            if last_tool == "debate_paper":
+                return {"final_response": self._format_observation_response(last), "route": "respond"}
+            if last_tool == "select_paper" and last.get("ok", False):
+                return {
+                    "pending_action": {
+                        "action": "tool_call",
+                        "tool": "debate_paper",
+                        "arguments": {"rounds": 3},
+                    },
+                    "route": "tool_executor",
+                }
         if goal == "read_selected" and last_tool in {"read_paper_context", "read_paper_fulltext"}:
             return {"route": "respond"}
         if goal in {"read_context_after_select", "read_fulltext_after_select"}:
@@ -849,6 +882,26 @@ class ChatAgentRuntime:
         ]
         return any(marker in text for marker in markers)
 
+    def _is_debate_request(self, user_input: str) -> bool:
+        text = user_input.lower()
+        markers = [
+            "多agent",
+            "多 agent",
+            "多智能体",
+            "多 智能体",
+            "辩论",
+            "正反方",
+            "support skeptic",
+            "support/skeptic",
+            "评审式讨论",
+            "debate",
+            "multi-agent",
+            "multi agent",
+            "agent debate",
+            "research discussion",
+        ]
+        return any(marker in text for marker in markers)
+
     def _mentions_current_paper(self, user_input: str) -> bool:
         text = user_input.lower()
         return any(marker in text for marker in ("这篇", "这篇论文", "这篇文章", "当前论文", "selected paper"))
@@ -900,7 +953,7 @@ def default_paper_id(
 ) -> dict[str, Any]:
     """Fill paper_id from the selected paper when a tool omitted it."""
 
-    if tool_name not in {"read_paper_context", "read_paper_fulltext", "analyze_paper"}:
+    if tool_name not in {"read_paper_context", "read_paper_fulltext", "debate_paper"}:
         return arguments
     if arguments.get("paper_id") or selected_paper is None:
         return arguments

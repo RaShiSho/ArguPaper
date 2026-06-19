@@ -10,7 +10,7 @@ from typing import Any
 
 from argupaper.config import Config
 from argupaper.tools import (
-    AnalyzePaperArgs,
+    DebatePaperArgs,
     LangChainToolbox,
     ListPapersArgs,
     ReadPaperContextArgs,
@@ -44,8 +44,8 @@ def default_paper_id(arguments: dict[str, Any], selected_paper: dict[str, Any] |
 
 
 __all__ = [
-    "AnalyzePaperArgs",
     "ChatToolbox",
+    "DebatePaperArgs",
     "ListPapersArgs",
     "ReadPaperContextArgs",
     "ReadPaperFullTextArgs",
