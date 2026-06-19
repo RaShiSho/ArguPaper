@@ -1,5 +1,17 @@
 # DONE
 
+## Chat Respond LLM 总结
+
+完成时间：2026-06-19
+
+本次基于 OpenSpec change `add-llm-backed-chat-respond-node` 将 chat 的 `respond` 节点升级为 observation-grounded responder：
+
+- 当工具已经返回 observations 且没有现成 `final_response` 时，`respond` 会调用 default LLM 基于工具结果生成最终回答。
+- `read_paper_context` 成功后不再只返回 `Loaded context...`，而是交给 responder 根据论文上下文生成内容阐述。
+- ReAct 已有成功 observation 但后续输出非 JSON 时，会路由到 `respond` 收口，不直接 fallback。
+- `/papers`、`/use`、`/analyze` 等已有 slash command 响应继续保留确定性结果。
+- responder LLM 不可用、失败或返回空内容时，降级为原有工具摘要，并写入 `respond_llm_failed` / `respond_fallback_used` 日志事件。
+
 ## Chat 本地优先与工具调用稳定化
 
 完成时间：2026-06-19

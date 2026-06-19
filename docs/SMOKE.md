@@ -23,6 +23,25 @@ uv run argupaper chat
 - 预期结果：`/papers` 正常列出本地库；`/use BackdoorAgent` 可选中论文；“帮我看看 backdooragent” 类请求在日志中优先出现 `select_paper` 或 `read_paper_context`，不先调用 `search_papers`；本地库检索走 `list_papers` 并尊重 limit；日志中的 `tool_call.arguments` 为归一化后的参数；相同 tool 与相同参数重复出现时写入 `duplicate_tool_call_blocked`，不继续重复执行。
 - 记录：___
 
+## Chat Respond LLM 总结
+
+- 功能名称：`argupaper chat` responder 基于 observations 生成最终回答
+- 适用场景：验证自然语言论文内容请求在 `read_paper_context` 成功后，由 `respond` 节点生成论文阐述，而不是只返回工具摘要
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在 BackdoorAgent 相关记录；已配置可用的 `LLM_PROVIDER__DEFAULT__*`
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper chat --help
+uv run argupaper chat
+/use BackdoorAgent
+帮我看看这篇论文讲了什么
+/exit
+```
+
+- 预期结果：日志中出现 `read_paper_context` observation 和 `respond_llm_call`；最终回答应概括论文的问题、方法、实验/证据和结论；不应只输出 `Loaded context for ...`；若 responder LLM 失败，日志写入 `respond_llm_failed` 与 `respond_fallback_used`，最终仍返回工具摘要而不是崩溃。
+- 记录：___
+
 ## 表单模板
 
 每条 smoke 项按以下字段维护：

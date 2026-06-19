@@ -236,7 +236,7 @@ uv run argupaper chat
 - `/analyze`：对当前 selected paper 调用 `AnalyzeWorkflow` tool。
 - `/exit`：退出当前 chat 进程。
 
-LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct 工具循环，例如搜索论文、读取当前论文上下文并回答问题。LLM 不可用时，自然语言会降级提示；slash commands 仍可使用。
+LLM provider 可用时，自然语言请求会进入 LangGraph Planner + ReAct 工具循环，例如搜索论文、读取当前论文上下文并回答问题。工具返回上下文后，`respond` 节点会基于 observations 生成最终回答；如果 responder LLM 调用失败，则回退为工具摘要。LLM 不可用时，自然语言会降级提示；slash commands 仍可使用。
 
 运行日志写入：
 

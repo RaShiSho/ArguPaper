@@ -25,6 +25,7 @@ PLANNER_USER = load_prompt("chat_agent", "planner_user.md")
 REACT_SYSTEM = load_prompt("chat_agent", "react_system.md")
 REACT_USER = load_prompt("chat_agent", "react_user.md")
 RESPOND_SYSTEM = load_prompt("chat_agent", "respond_system.md")
+RESPOND_USER = load_prompt("chat_agent", "respond_user.md")
 
 
 class ChatAgentRuntime:
@@ -263,6 +264,7 @@ class ChatAgentRuntime:
             temperature=0.2,
             max_tokens=900,
         )
+        response = ""
         try:
             response = str(
                 await runnable.ainvoke(
@@ -278,8 +280,22 @@ class ChatAgentRuntime:
             )
             action = extract_json_object(response)
         except Exception as exc:
+            reason = f"ReAct LLM returned invalid action: {type(exc).__name__}: {exc}"
+            if self._has_successful_observation(state.get("observations", [])):
+                self.logger.write(
+                    "react_invalid_action_recovered",
+                    {
+                        "run_id": state["run_id"],
+                        "reason": reason,
+                        "raw_response": response[:1000],
+                    },
+                )
+                warnings = list(state.get("warnings", []))
+                if reason not in warnings:
+                    warnings.append(reason)
+                return {"warnings": warnings, "route": "respond"}
             return {
-                "fallback_reason": f"ReAct LLM returned invalid action: {type(exc).__name__}: {exc}",
+                "fallback_reason": reason,
                 "route": "fallback",
             }
 
@@ -402,8 +418,70 @@ class ChatAgentRuntime:
         final_response = str(state.get("final_response", "")).strip()
         if final_response:
             return {"final_response": final_response}
-        if state.get("observations"):
-            return {"final_response": self._format_observation_response(state["observations"][-1])}
+        observations = state.get("observations", [])
+        if observations:
+            fallback_response = self._format_observation_response(observations[-1])
+            if not self.llm_router.has_provider("default"):
+                self.logger.write(
+                    "respond_fallback_used",
+                    {
+                        "run_id": state["run_id"],
+                        "reason": "Default LLM provider is not configured.",
+                    },
+                )
+                return {"final_response": fallback_response}
+
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", RESPOND_SYSTEM),
+                    ("human", RESPOND_USER),
+                ]
+            )
+            runnable = prompt | build_llm_router_runnable(
+                self.llm_router,
+                provider_alias="default",
+                temperature=0.2,
+                max_tokens=1600,
+            )
+            self.logger.write(
+                "respond_llm_call",
+                {
+                    "run_id": state["run_id"],
+                    "observation_count": len(observations),
+                    "tools": [str(item.get("tool", "")) for item in observations],
+                },
+            )
+            try:
+                response = str(
+                    await runnable.ainvoke(
+                        {
+                            "user_input": state["user_input"],
+                            "plan": state.get("plan", ""),
+                            "selected_paper": self._selected_text(state.get("selected_paper")),
+                            "observations": self._format_observations_for_response(observations),
+                            "warnings": self._format_warnings(state.get("warnings", [])),
+                            "messages": self._recent_messages(state.get("messages", [])),
+                        }
+                    )
+                ).strip()
+            except Exception as exc:
+                reason = f"Responder LLM failed: {type(exc).__name__}: {exc}"
+                self.logger.write("respond_llm_failed", {"run_id": state["run_id"], "reason": reason})
+                self.logger.write("respond_fallback_used", {"run_id": state["run_id"], "reason": reason})
+                warnings = list(state.get("warnings", []))
+                if reason not in warnings:
+                    warnings.append(reason)
+                return {"final_response": fallback_response, "warnings": warnings}
+            if response:
+                return {"final_response": response}
+
+            reason = "Responder LLM returned empty output."
+            self.logger.write("respond_llm_failed", {"run_id": state["run_id"], "reason": reason})
+            self.logger.write("respond_fallback_used", {"run_id": state["run_id"], "reason": reason})
+            warnings = list(state.get("warnings", []))
+            if reason not in warnings:
+                warnings.append(reason)
+            return {"final_response": fallback_response, "warnings": warnings}
         return {"final_response": "没有可用结果。"}
 
     async def _fallback(self, state: ChatAgentState) -> dict[str, Any]:
@@ -456,6 +534,66 @@ class ChatAgentRuntime:
                 )
             return "\n".join(lines)
         return summary or "工具执行完成。"
+
+    def _format_observations_for_response(self, observations: list[dict[str, Any]]) -> str:
+        compact = [self._compact_observation_for_response(item) for item in observations[-6:]]
+        return self._truncate_text(json.dumps(compact, ensure_ascii=False, indent=2), 24000)
+
+    def _compact_observation_for_response(self, observation: dict[str, Any]) -> dict[str, Any]:
+        tool = str(observation.get("tool", ""))
+        data = dict(observation.get("data", {}) or {})
+        compact: dict[str, Any] = {
+            "tool": tool,
+            "ok": bool(observation.get("ok", False)),
+            "summary": str(observation.get("summary", "")),
+        }
+        if tool == "read_paper_context":
+            compact["data"] = {
+                "metadata": data.get("metadata", {}),
+                "abstract": data.get("abstract", {}),
+                "markdown_excerpt": self._truncate_text(str(data.get("markdown_excerpt", "")), 9000),
+                "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 7000),
+            }
+        elif tool == "analyze_paper":
+            compact["data"] = {
+                "paper_id": data.get("paper_id"),
+                "report_title": data.get("report_title"),
+                "from_cache": data.get("from_cache"),
+                "supplementary_search_used": data.get("supplementary_search_used"),
+                "warnings": data.get("warnings", []),
+                "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 9000),
+            }
+        elif tool == "search_papers":
+            compact["data"] = {
+                "results": list(data.get("results", []) or [])[:8],
+                "warnings": data.get("warnings", []),
+                "retrieved_count": data.get("retrieved_count"),
+                "filtered_count": data.get("filtered_count"),
+            }
+        elif tool == "list_papers":
+            compact["data"] = {
+                "records": list(data.get("records", []) or [])[:20],
+                "count": data.get("count"),
+                "total_count": data.get("total_count"),
+                "matched_count": data.get("matched_count"),
+                "query": data.get("query"),
+            }
+        else:
+            compact["data"] = self._truncate_text(json.dumps(data, ensure_ascii=False), 6000)
+        return compact
+
+    def _format_warnings(self, warnings: list[str]) -> str:
+        cleaned = [str(item).strip() for item in warnings if str(item).strip()]
+        return "\n".join(f"- {item}" for item in cleaned) if cleaned else "None"
+
+    def _has_successful_observation(self, observations: list[dict[str, Any]]) -> bool:
+        return any(bool(item.get("ok", False)) for item in observations)
+
+    def _truncate_text(self, text: str, limit: int) -> str:
+        normalized = text.strip()
+        if len(normalized) <= limit:
+            return normalized
+        return normalized[: limit - 3].rstrip() + "..."
 
     def _summarize_observations(self, observations: list[dict[str, Any]]) -> str:
         if not observations:
@@ -541,10 +679,10 @@ class ChatAgentRuntime:
         if goal == "list_local":
             return {"final_response": self._format_observation_response(last), "route": "respond"}
         if goal == "read_selected" and last_tool == "read_paper_context":
-            return {"final_response": self._format_observation_response(last), "route": "respond"}
+            return {"route": "respond"}
         if goal == "read_context_after_select":
             if last_tool == "read_paper_context":
-                return {"final_response": self._format_observation_response(last), "route": "respond"}
+                return {"route": "respond"}
             if last_tool == "select_paper" and last.get("ok", False):
                 return {
                     "pending_action": {
