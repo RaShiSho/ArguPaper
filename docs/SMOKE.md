@@ -358,3 +358,22 @@ uv run argupaper papers <paper_id>
 
 - 预期结果：首次 convert 后 PaperStore metadata 的 `title` 为 Markdown 正文标题 `What the fuck`，不是 `WTF`；metadata 包含 `title_source` 与 `title_confidence`；analyze 后同一记录升级为 `analyzed` 且仍保留真实标题；若 Markdown 没有有效标题，流程不失败并回退文件名。
 - 记录：___
+
+### 28. Chat Prompt 统一目录
+
+- 功能名称：Chat Agent prompt 文件化
+- 适用场景：验证 `argupaper chat` 的 Planner/ReAct prompt 已迁移到 `src/argupaper/prompts/chat_agent/`，并且 LangChain 模板变量仍可正常格式化
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在至少一条记录
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper chat --help
+uv run argupaper chat
+/papers
+帮我看看backdooragent这篇论文讲了什么
+/exit
+```
+
+- 预期结果：编译与 chat help 均成功；`/papers` 仍列出本地 PaperStore 记录；自然语言请求进入 Planner + ReAct 时不因 prompt 文件加载、模板变量或 JSON 示例花括号报错；ReAct prompt 中本地库检索示例为可读 UTF-8 文本
+- 记录：___

@@ -1,5 +1,16 @@
 # DONE
 
+## Chat Prompt 统一目录
+
+完成时间：2026-06-19
+
+本次将 `argupaper chat` 的 prompt 文本从运行时代码迁移到 `src/argupaper/prompts/chat_agent/`：
+
+- 新增 planner、ReAct 与 responder 的 system/user prompt 文件，复用现有 `load_prompt()` 读取机制。
+- `ChatAgentRuntime` 继续保持原有 LangGraph 节点与工具调用逻辑，仅把 prompt 来源改为文件。
+- 清理 ReAct prompt 中本地论文库检索示例的乱码文本，保留 LangChain f-string 模板变量和 JSON 花括号转义。
+- 当前 responder prompt 仅作为 prompt 资产保留，不改变 `_respond()` 的现有行为。
+
 ## 论文真实标题入库
 
 完成时间：2026-06-08

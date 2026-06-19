@@ -12,41 +12,17 @@ from langgraph.graph import END, StateGraph
 from argupaper.agents.chat.logging import ChatRuntimeLogger
 from argupaper.agents.chat.state import ChatAgentState, ChatTurnResult, SelectedPaper
 from argupaper.config import Config
+from argupaper.prompts import load_prompt
 from argupaper.services.llm import LLMRouter, build_llm_router_runnable, extract_json_object
 from argupaper.tools import build_default_toolbox
 
 ProgressCallback = Optional[Callable[[str], None]]
 
-PLANNER_SYSTEM = """You are ArguPaper's research chat planner.
-Plan one short next-step strategy for a research assistant turn.
-You must rely on the registered tools for paper search, PaperStore access, and analysis.
-Do not claim to have run a workflow unless a tool observation says it ran.
-Keep the plan concise."""
-
-REACT_SYSTEM = """You are ArguPaper's ReAct research assistant.
-You can only act through these tools:
-{tools}
-
-Return exactly one JSON object, with one of these shapes:
-{{"action":"tool_call","tool":"tool_name","arguments":{{"key":"value"}}}}
-{{"action":"final_answer","content":"answer for the user"}}
-{{"action":"ask_user","content":"short clarification question"}}
-
-Rules:
-- Use list_papers for listing the local library.
-- Use list_papers with query and limit when the user asks to find, filter, or search inside the local paper library.
-- For local-library searches, extract compact keywords from the user request; for example, "在本地论文库中找2篇与agent安全相关的论文" should call list_papers with query like "agent" or "agent安全" and limit 2.
-- If list_papers returns zero records for a query, say no local records matched that query; do not say the local library is empty unless total_count is 0.
-- Use select_paper before answering about an unspecified paper.
-- Use read_paper_context before answering questions about the selected paper unless the needed context is already in observations.
-- Use analyze_paper for analysis requests.
-- Use search_papers for external paper search requests.
-- Never invent tool results."""
-
-RESPOND_SYSTEM = """You are ArguPaper's concise CLI chat responder.
-Answer the user from the available plan and observations.
-Mention warnings or tool errors briefly when relevant.
-Do not invent paper details beyond the provided observations."""
+PLANNER_SYSTEM = load_prompt("chat_agent", "planner_system.md")
+PLANNER_USER = load_prompt("chat_agent", "planner_user.md")
+REACT_SYSTEM = load_prompt("chat_agent", "react_system.md")
+REACT_USER = load_prompt("chat_agent", "react_user.md")
+RESPOND_SYSTEM = load_prompt("chat_agent", "respond_system.md")
 
 
 class ChatAgentRuntime:
@@ -194,10 +170,7 @@ class ChatAgentRuntime:
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", PLANNER_SYSTEM),
-                (
-                    "human",
-                    "User input:\n{user_input}\n\nSelected paper:\n{selected_paper}\n\nRecent messages:\n{messages}",
-                ),
+                ("human", PLANNER_USER),
             ]
         )
         runnable = prompt | build_llm_router_runnable(
@@ -254,11 +227,7 @@ class ChatAgentRuntime:
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", REACT_SYSTEM),
-                (
-                    "human",
-                    "Plan:\n{plan}\n\nUser input:\n{user_input}\n\nSelected paper:\n{selected_paper}\n\n"
-                    "Observations:\n{observations}\n\nRecent messages:\n{messages}",
-                ),
+                ("human", REACT_USER),
             ]
         )
         runnable = prompt | build_llm_router_runnable(
