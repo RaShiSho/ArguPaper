@@ -712,12 +712,6 @@ class ChatAgentRuntime:
             if content_tool == "read_paper_fulltext"
             else "Local-first: read the selected PaperStore record context."
         )
-        if self._mentions_current_paper(user_input) and self._selected_dict(selected):
-            return {
-                "goal": "read_selected",
-                "plan": content_plan,
-                "action": {"action": "tool_call", "tool": content_tool, "arguments": {}},
-            }
         paper_query = self._extract_local_paper_query(user_input)
         if paper_query:
             return {
@@ -728,6 +722,12 @@ class ChatAgentRuntime:
                     "tool": "select_paper",
                     "arguments": {"paper": paper_query},
                 },
+            }
+        if self._mentions_current_paper(user_input) and self._selected_dict(selected):
+            return {
+                "goal": "read_selected",
+                "plan": content_plan,
+                "action": {"action": "tool_call", "tool": content_tool, "arguments": {}},
             }
         if self._selected_dict(selected):
             return {
