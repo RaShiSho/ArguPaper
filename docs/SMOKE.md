@@ -1,5 +1,24 @@
 # SMOKE
 
+## RAG Chunking Pipeline
+
+- Feature: RAG chunking turns local paper PDF, Markdown, or text paths into `PaperChunk` records.
+- Scenario: Verify lazy construction, section detection, default reference exclusion, optional reference inclusion, long-text fallback splitting, PaperStore metadata inference, and PDF cache-miss errors.
+- Preconditions: `uv sync` has been run. PDF inputs must already have a MinerU Markdown cache entry; chunking does not call MinerU.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.services.rag import PaperChunker; text='# Abstract\nA short abstract.\n\n# Introduction\nIntro text.\n\n# Methodology\nMethod text.\n\n# References\n[1] Ref'; chunks=PaperChunker().chunk_text(text, paper_id='demo'); print([(c.section_type, c.text) for c in chunks])"
+uv run python -c "from argupaper.config import load_config; from argupaper.services.rag import build_paper_chunker; c=load_config(require_pdf_api_key=False); print(c.rag.include_references, type(build_paper_chunker(c.rag)).__name__)"
+uv run python -c "from argupaper.services.rag import PaperChunker; text='# Method\n' + ('x ' * 7000); chunks=PaperChunker(chunk_size=80, chunk_overlap=10).chunk_text(text, paper_id='long'); print(len(chunks), chunks[0].page_start, chunks[0].page_end)"
+```
+
+- Optional reference-inclusion smoke: run the second command with `RAG_INCLUDE_REFERENCES=true` in the environment, then chunk a document with a `References` heading and verify a `references` chunk is present.
+- Optional PDF cache-miss smoke: call `PaperChunker().chunk_path("path/to/not-converted.pdf")` and verify it raises `InputValidationError` with a message asking to run the existing PDF conversion flow first.
+- Expected result: Default chunks omit references, page fields are consistently `None` when no page markers exist, construction does not read files or connect to external services, and PDF cache misses fail explicitly.
+- Record: ___
+
 ## Milvus Vector Store
 
 - Feature: Milvus vector store wraps dense chunk upsert, search, and delete-by-paper.
@@ -42,10 +61,10 @@ uv run python -c "import asyncio`nfrom argupaper.config import load_config`nfrom
 
 ```powershell
 uv run python -m compileall src/argupaper
-uv run python -c "from argupaper.config import load_config; c=load_config(require_pdf_api_key=False); print(c.rag_enabled, c.rag.embedding.base_url, c.rag.embedding.model, c.rag.milvus.uri, c.rag.milvus.collection, c.rag.top_k, c.rag.chunk_size, c.rag.chunk_overlap, c.rag.vector_dim)"
+uv run python -c "from argupaper.config import load_config; c=load_config(require_pdf_api_key=False); print(c.rag_enabled, c.rag.embedding.base_url, c.rag.embedding.model, c.rag.milvus.uri, c.rag.milvus.collection, c.rag.top_k, c.rag.chunk_size, c.rag.chunk_overlap, c.rag.include_references, c.rag.vector_dim)"
 ```
 
-- Expected result: The command prints default RAG settings without network or database connection errors. Defaults are `False`, `http://localhost:11434`, `bge-m3`, `./data/milvus.db`, `paper_chunks`, `6`, `800`, `120`, and `1024`.
+- Expected result: The command prints default RAG settings without network or database connection errors. Defaults are `False`, `http://localhost:11434`, `bge-m3`, `./data/milvus.db`, `paper_chunks`, `6`, `800`, `120`, `False`, and `1024`.
 - Record: ___
 
 本文件是项目唯一的手工 smoke 验收入口。

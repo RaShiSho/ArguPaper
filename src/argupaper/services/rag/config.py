@@ -30,6 +30,7 @@ class RAGConfig(BaseModel):
     top_k: int = Field(default=6, ge=1)
     chunk_size: int = Field(default=800, ge=1)
     chunk_overlap: int = Field(default=120, ge=0)
+    include_references: bool = False
     vector_dim: int = Field(default=1024, ge=1)
     milvus: MilvusConfig = Field(default_factory=MilvusConfig)
     embedding: OllamaEmbeddingConfig = Field(default_factory=OllamaEmbeddingConfig)

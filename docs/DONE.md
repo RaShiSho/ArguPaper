@@ -1,5 +1,16 @@
 # DONE
 
+## RAG Chunking Pipeline
+
+Completed: 2026-06-20
+
+- Added `PaperTextParser` for local PDF, Markdown, and text inputs.
+- PDF chunking reuses the existing MinerU Markdown cache by PDF SHA256 and fails clearly when no converted cache exists.
+- Added `PaperChunker` and `PaperChunk` for section-first, paragraph-second, length-fallback chunking.
+- Common paper sections are normalized to `abstract`, `introduction`, `related_work`, `method`, `experiments`, `discussion`, `conclusion`, `references`, or `other`.
+- References are excluded by default and can be enabled with `RAG_INCLUDE_REFERENCES=true`.
+- No embedding calls, Milvus writes, Agent tools, or slash command behavior were added.
+
 ## Milvus Vector Store
 
 Completed: 2026-06-20
@@ -25,7 +36,7 @@ Completed: 2026-06-20
 Completed: 2026-06-20
 
 - Added `RAGConfig`, `MilvusConfig`, and `OllamaEmbeddingConfig` for future local paper RAG.
-- `load_config()` now reads `RAG_ENABLED`, `OLLAMA_BASE_URL`, `OLLAMA_EMBED_MODEL`, `MILVUS_URI`, `MILVUS_COLLECTION`, `RAG_TOP_K`, `RAG_CHUNK_SIZE`, and `RAG_CHUNK_OVERLAP`.
+- `load_config()` now reads `RAG_ENABLED`, `OLLAMA_BASE_URL`, `OLLAMA_EMBED_MODEL`, `MILVUS_URI`, `MILVUS_COLLECTION`, `RAG_TOP_K`, `RAG_CHUNK_SIZE`, `RAG_CHUNK_OVERLAP`, and `RAG_INCLUDE_REFERENCES`.
 - Added `argupaper.services.rag.init` as a lazy initialization boundary. It returns resolved settings only and does not connect to Ollama or Milvus during import or config loading.
 - No retrieval tool, vector indexing, or slash command behavior was changed.
 

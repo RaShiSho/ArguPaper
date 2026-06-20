@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from argupaper.services.rag.config import RAGConfig
+from argupaper.services.rag.chunker import PaperChunker
 from argupaper.services.rag.embedding import OllamaEmbeddingClient
+from argupaper.services.rag.parser import PaperTextParser
 from argupaper.services.rag.vector_store import MilvusVectorStore
 
 
@@ -33,6 +35,21 @@ def build_ollama_embedding_client(config: RAGConfig) -> OllamaEmbeddingClient:
     return OllamaEmbeddingClient(config.embedding)
 
 
+def build_paper_chunker(
+    config: RAGConfig,
+    *,
+    pdf_cache_dir: str = "./data/cache",
+) -> PaperChunker:
+    """Build a paper chunker without reading files or opening external connections."""
+
+    return PaperChunker(
+        chunk_size=config.chunk_size,
+        chunk_overlap=config.chunk_overlap,
+        include_references=config.include_references,
+        parser=PaperTextParser(pdf_cache_dir=pdf_cache_dir),
+    )
+
+
 def build_milvus_vector_store(config: RAGConfig) -> MilvusVectorStore:
     """Build a Milvus vector store without opening external connections."""
 
@@ -43,5 +60,6 @@ __all__ = [
     "RAGServiceSettings",
     "build_milvus_vector_store",
     "build_ollama_embedding_client",
+    "build_paper_chunker",
     "build_rag_service_settings",
 ]
