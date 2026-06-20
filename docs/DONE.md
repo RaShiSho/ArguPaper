@@ -1,5 +1,14 @@
 # DONE
 
+## RAG Configuration Layer
+
+Completed: 2026-06-20
+
+- Added `RAGConfig`, `MilvusConfig`, and `OllamaEmbeddingConfig` for future local paper RAG.
+- `load_config()` now reads `RAG_ENABLED`, `OLLAMA_BASE_URL`, `OLLAMA_EMBED_MODEL`, `MILVUS_URI`, `MILVUS_COLLECTION`, `RAG_TOP_K`, `RAG_CHUNK_SIZE`, and `RAG_CHUNK_OVERLAP`.
+- Added `argupaper.services.rag.init` as a lazy initialization boundary. It returns resolved settings only and does not connect to Ollama or Milvus during import or config loading.
+- No retrieval tool, vector indexing, or slash command behavior was changed.
+
 ## Analyze 用户入口重命名为 Debate
 
 完成时间：2026-06-19

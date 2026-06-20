@@ -7,6 +7,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+from argupaper.services.rag import MilvusConfig, OllamaEmbeddingConfig, RAGConfig
 from argupaper.workflows.errors import ConfigurationError
 
 # Load .env file
@@ -78,6 +79,7 @@ class Config(BaseModel):
 
     pdf: PDFConfig
     retrieval: RetrievalConfig = RetrievalConfig()
+    rag: RAGConfig = RAGConfig()
     model: ModelConfig = ModelConfig()
     search_workflow: SearchWorkflowConfig = SearchWorkflowConfig()
     debate: DebateConfig = DebateConfig()
@@ -85,6 +87,12 @@ class Config(BaseModel):
     data_path: str = "./data"
     paper_storage_path: str = "./data/papers"
     analyze_enable_retrieval_loop: bool = True
+
+    @property
+    def rag_enabled(self) -> bool:
+        """Whether local RAG is enabled."""
+
+        return self.rag.enabled
 
 
 def _load_llm_providers() -> dict[str, LLMProviderConfig]:
@@ -119,6 +127,15 @@ def _load_llm_providers() -> dict[str, LLMProviderConfig]:
             model=model,
         )
     return providers
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a boolean environment variable."""
+
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def load_config(require_pdf_api_key: bool = True) -> Config:
@@ -161,6 +178,20 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
             serpapi_api_key=os.getenv("SERPAPI_API_KEY") or os.getenv("SERP_API_KEY"),
             default_limit=int(os.getenv("SEARCH_DEFAULT_LIMIT", "10")),
             max_results=int(os.getenv("SEARCH_MAX_RESULTS", "20")),
+        ),
+        rag=RAGConfig(
+            enabled=_env_bool("RAG_ENABLED", False),
+            top_k=int(os.getenv("RAG_TOP_K", "6")),
+            chunk_size=int(os.getenv("RAG_CHUNK_SIZE", "800")),
+            chunk_overlap=int(os.getenv("RAG_CHUNK_OVERLAP", "120")),
+            milvus=MilvusConfig(
+                uri=os.getenv("MILVUS_URI", "./data/milvus.db"),
+                collection=os.getenv("MILVUS_COLLECTION", "paper_chunks"),
+            ),
+            embedding=OllamaEmbeddingConfig(
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
+                model=os.getenv("OLLAMA_EMBED_MODEL", "bge-m3"),
+            ),
         ),
         model=ModelConfig(
             model=os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022"),

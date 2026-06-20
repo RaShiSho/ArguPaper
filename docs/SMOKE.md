@@ -1,5 +1,20 @@
 # SMOKE
 
+## RAG Configuration Layer
+
+- Feature: RAG configuration can be loaded without connecting to external services.
+- Scenario: Verify that local RAG defaults and environment overrides are available through `load_config()`.
+- Preconditions: `uv sync` has been run. Ollama and Milvus do not need to be running.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.config import load_config; c=load_config(require_pdf_api_key=False); print(c.rag_enabled, c.rag.embedding.base_url, c.rag.embedding.model, c.rag.milvus.uri, c.rag.milvus.collection, c.rag.top_k, c.rag.chunk_size, c.rag.chunk_overlap)"
+```
+
+- Expected result: The command prints default RAG settings without network or database connection errors. Defaults are `False`, `http://localhost:11434`, `bge-m3`, `./data/milvus.db`, `paper_chunks`, `6`, `800`, and `120`.
+- Record: ___
+
 本文件是项目唯一的手工 smoke 验收入口。
 
 ## Chat 论文全文读取
