@@ -1,5 +1,23 @@
 # SMOKE
 
+## RAG Single-Paper Indexer
+
+- Feature: `RAGIndexer` indexes one PaperStore paper into Milvus through chunking, batched embeddings, delete-by-paper, and upsert.
+- Scenario: Verify lazy construction, dry run behavior, batched embedding calls, delete/upsert order, and readable failures.
+- Preconditions: `uv sync` has been run. Real indexing additionally requires local Ollama and a usable Milvus URI.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.config import load_config; from argupaper.memory.paper_store import PaperStore; from argupaper.services.rag import build_rag_indexer; c=load_config(require_pdf_api_key=False); indexer=build_rag_indexer(c.rag, paper_store=PaperStore()); print(type(indexer).__name__)"
+```
+
+- Dry run smoke: create a temporary PaperStore record with `metadata.json` and `paper.md`, call `await indexer.index_paper('paper-id', dry_run=True)`, and verify `chunk_count > 0`, `embedding_dim is None`, `skipped_sections` includes `references`, and no fake embedding/vector-store calls were made.
+- Mock write smoke: use fake embedding and vector-store objects, set `embedding_batch_size=2`, index a paper with at least three chunks, and verify embeddings were requested in multiple batches and vector-store calls are `delete_by_paper` before `upsert`.
+- Failure smoke: unknown paper IDs raise `InputValidationError`; embedding count or dimension mismatches raise readable errors with `paper_id`; Milvus upsert failures preserve the stage and say old chunks were already deleted.
+- Expected result: Construction is lazy. Dry run never touches Ollama or Milvus. Non-dry-run writes old-paper deletion before upsert and returns `RAGIndexStats`.
+- Record: ___
+
 ## RAG Chunking Pipeline
 
 - Feature: RAG chunking turns local paper PDF, Markdown, or text paths into `PaperChunk` records.

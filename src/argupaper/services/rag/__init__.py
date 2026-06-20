@@ -3,11 +3,13 @@
 from argupaper.services.rag.chunker import PaperChunk, PaperChunker
 from argupaper.services.rag.config import MilvusConfig, OllamaEmbeddingConfig, RAGConfig
 from argupaper.services.rag.embedding import OllamaEmbeddingClient
+from argupaper.services.rag.indexer import RAGIndexer, RAGIndexStats
 from argupaper.services.rag.init import (
     RAGServiceSettings,
     build_milvus_vector_store,
     build_ollama_embedding_client,
     build_paper_chunker,
+    build_rag_indexer,
     build_rag_service_settings,
 )
 from argupaper.services.rag.parser import PaperTextParser, ParsedPaperText, ParsedSection
@@ -26,9 +28,12 @@ __all__ = [
     "ParsedPaperText",
     "ParsedSection",
     "RAGConfig",
+    "RAGIndexer",
+    "RAGIndexStats",
     "RAGServiceSettings",
     "build_milvus_vector_store",
     "build_ollama_embedding_client",
     "build_paper_chunker",
+    "build_rag_indexer",
     "build_rag_service_settings",
 ]

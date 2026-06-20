@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from argupaper.memory.paper_store import PaperStore
 from argupaper.services.rag.config import RAGConfig
 from argupaper.services.rag.chunker import PaperChunker
 from argupaper.services.rag.embedding import OllamaEmbeddingClient
+from argupaper.services.rag.indexer import RAGIndexer
 from argupaper.services.rag.parser import PaperTextParser
 from argupaper.services.rag.vector_store import MilvusVectorStore
 
@@ -56,10 +58,27 @@ def build_milvus_vector_store(config: RAGConfig) -> MilvusVectorStore:
     return MilvusVectorStore(config.milvus, default_dimension=config.vector_dim)
 
 
+def build_rag_indexer(
+    config: RAGConfig,
+    *,
+    paper_store: PaperStore,
+    pdf_cache_dir: str = "./data/cache",
+) -> RAGIndexer:
+    """Build a single-paper RAG indexer without opening external connections."""
+
+    return RAGIndexer(
+        paper_store=paper_store,
+        chunker=build_paper_chunker(config, pdf_cache_dir=pdf_cache_dir),
+        embedding_client=build_ollama_embedding_client(config),
+        vector_store=build_milvus_vector_store(config),
+    )
+
+
 __all__ = [
     "RAGServiceSettings",
     "build_milvus_vector_store",
     "build_ollama_embedding_client",
     "build_paper_chunker",
+    "build_rag_indexer",
     "build_rag_service_settings",
 ]

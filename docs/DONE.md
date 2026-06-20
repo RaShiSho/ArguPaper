@@ -1,5 +1,15 @@
 # DONE
 
+## RAG Single-Paper Indexer
+
+Completed: 2026-06-20
+
+- Added `RAGIndexer` for indexing one PaperStore paper into Milvus.
+- The indexer resolves the local `paper.md`, parses and chunks it, batches embedding calls, deletes old chunks for the paper, and upserts the new chunks.
+- Added `RAGIndexStats` with `paper_id`, `chunk_count`, `embedding_dim`, `skipped_sections`, and `warnings`.
+- Added dry-run indexing that parses and chunks without calling Ollama or Milvus.
+- No Agent tool, slash command, batch indexing command, or retrieval behavior was added.
+
 ## RAG Chunking Pipeline
 
 Completed: 2026-06-20
