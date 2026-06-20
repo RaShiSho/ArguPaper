@@ -1,5 +1,15 @@
 # DONE
 
+## RAG Retriever and Context Builder
+
+Completed: 2026-06-20
+
+- Added `RAGRetriever` for query embedding and Milvus dense-vector search.
+- Retrieval supports `paper_id`, `section_type`, `score_threshold`, and empty-result warnings.
+- Added `RetrievedChunk`, `RetrievalQuery`, and `RetrievalResult` service-layer models.
+- Added `ContextBuilder` for deduplicated, score-ordered, source-tagged LLM context strings.
+- No Agent tool, slash command, or responder integration was added.
+
 ## RAG Single-Paper Indexer
 
 Completed: 2026-06-20

@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from argupaper.memory.paper_store import PaperStore
 from argupaper.services.rag.config import RAGConfig
 from argupaper.services.rag.chunker import PaperChunker
+from argupaper.services.rag.context_builder import ContextBuilder
 from argupaper.services.rag.embedding import OllamaEmbeddingClient
 from argupaper.services.rag.indexer import RAGIndexer
 from argupaper.services.rag.parser import PaperTextParser
+from argupaper.services.rag.retriever import RAGRetriever
 from argupaper.services.rag.vector_store import MilvusVectorStore
 
 
@@ -74,11 +76,28 @@ def build_rag_indexer(
     )
 
 
+def build_rag_retriever(config: RAGConfig) -> RAGRetriever:
+    """Build a RAG retriever without opening external connections."""
+
+    return RAGRetriever(
+        embedding_client=build_ollama_embedding_client(config),
+        vector_store=build_milvus_vector_store(config),
+    )
+
+
+def build_context_builder(*, max_chars: int = 12000) -> ContextBuilder:
+    """Build an LLM context builder."""
+
+    return ContextBuilder(max_chars=max_chars)
+
+
 __all__ = [
     "RAGServiceSettings",
+    "build_context_builder",
     "build_milvus_vector_store",
     "build_ollama_embedding_client",
     "build_paper_chunker",
     "build_rag_indexer",
+    "build_rag_retriever",
     "build_rag_service_settings",
 ]

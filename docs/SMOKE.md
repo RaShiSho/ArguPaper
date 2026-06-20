@@ -1,5 +1,22 @@
 # SMOKE
 
+## RAG Retriever and Context Builder
+
+- Feature: Retrieve indexed paper chunks and render traceable LLM context.
+- Scenario: Verify lazy construction, paper filtering, section filtering, score thresholding, empty-result warnings, deduplication, ordering, and context source markers.
+- Preconditions: `uv sync` has been run. Real retrieval additionally requires indexed chunks, local Ollama, and a usable Milvus URI.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.config import load_config; from argupaper.services.rag import build_rag_retriever, build_context_builder; c=load_config(require_pdf_api_key=False); print(type(build_rag_retriever(c.rag)).__name__, type(build_context_builder()).__name__)"
+```
+
+- Mock retrieval smoke: use fake embedding and vector store results, query with `paper_id='paper-1'`, `section_type='method'`, and a score threshold; verify only matching chunks are returned and empty matches return `warnings`.
+- Context smoke: pass duplicate `RetrievedChunk` entries to `ContextBuilder(max_chars=...)`; verify duplicate `chunk_id` is removed, higher score wins, output includes `[chunk_id=..., paper=..., section=..., page=..., score=...]`, and long output is truncated to the max length.
+- Expected result: The retriever returns `RetrievalResult` with chunks or non-fatal no-result warnings. Context strings contain traceable source markers suitable for LLM prompts.
+- Record: ___
+
 ## RAG Single-Paper Indexer
 
 - Feature: `RAGIndexer` indexes one PaperStore paper into Milvus through chunking, batched embeddings, delete-by-paper, and upsert.
