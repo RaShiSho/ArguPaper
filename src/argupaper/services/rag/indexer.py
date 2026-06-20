@@ -80,6 +80,7 @@ class RAGIndexer:
 
         embeddings, embedding_dim = await self._embed_chunks(resolved_paper_id, chunks)
         milvus_chunks = self._to_milvus_chunks(chunks, embeddings)
+        self._ensure_vector_store_ready(resolved_paper_id, embedding_dim)
         self._delete_existing_chunks(resolved_paper_id)
         self._upsert_chunks(resolved_paper_id, milvus_chunks)
 
@@ -142,6 +143,15 @@ class RAGIndexer:
         if expected_dim is None:
             raise ExternalServiceError(f"RAG embedding produced no vectors (paper_id={paper_id}).")
         return embeddings, expected_dim
+
+    def _ensure_vector_store_ready(self, paper_id: str, embedding_dim: int) -> None:
+        try:
+            self.vector_store.ensure_collection(embedding_dim)
+        except ExternalServiceError as exc:
+            raise ExternalServiceError(
+                "RAG Milvus collection preflight failed before deleting old chunks "
+                f"(paper_id={paper_id}; stage=ensure_collection): {exc}"
+            ) from exc
 
     def _delete_existing_chunks(self, paper_id: str) -> None:
         try:

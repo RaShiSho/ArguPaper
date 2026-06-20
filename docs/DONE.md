@@ -1,5 +1,18 @@
 # DONE
 
+## RAG Milvus Server Metric Compatibility
+
+Completed: 2026-06-21
+
+- Changed Milvus dense-vector indexing and search from `COSINE` to `IP` for compatibility with local `milvus-server` builds that support only `L2` and `IP`.
+- Normalized stored chunk vectors and query vectors before Milvus operations so `IP` behaves like cosine similarity.
+- Added an `insert()` path for Milvus servers older than 2.3 whose gRPC API does not implement `Upsert`.
+- Switched delete-by-paper to a primary-key delete path for Milvus servers that do not support deleting by non-primary `paper_id` filters.
+- Flushed collections after writes and loaded collections before search so fresh inserts are visible to retrieval.
+- Existing collections now get a missing vector index created during `ensure_collection()`.
+- Added a collection preflight step before deleting old paper chunks during indexing, reducing the chance of losing an existing paper index when collection creation fails.
+- No RAG CLI arguments, workflow interfaces, PaperStore behavior, or slash commands were changed.
+
 ## RAG Workflow and CLI Commands
 
 Completed: 2026-06-20

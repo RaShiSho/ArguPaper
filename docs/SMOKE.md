@@ -1,5 +1,26 @@
 # SMOKE
 
+## RAG Milvus Server Metric Compatibility
+
+- Feature: RAG vector storage works with local `milvus-server` instances that support `IP` and `L2` but not `COSINE`.
+- Scenario: Verify service Milvus indexing/search with normalized vectors and `IP` metric.
+- Preconditions: `uv sync` has been run. Local `milvus-server` is running on `http://localhost:19530`. Local Ollama is running with `bge-m3`.
+- Steps:
+
+```powershell
+$env:MILVUS_URI = "http://localhost:19530"
+$env:OLLAMA_BASE_URL = "http://localhost:11434"
+$env:RAG_ENABLED = "true"
+uv run python -m compileall src/argupaper
+uv run argupaper rag status
+uv run argupaper rag index <paper_id>
+uv run argupaper rag search "method details" --paper-id <paper_id>
+```
+
+- Expected result: `rag status` shows the service Milvus URI. `rag index` creates or validates the collection with `IP`, writes chunks using `upsert()` or the older-server `insert()` fallback, deletes old paper chunks directly or through the primary-key fallback, and does not delete old chunks before collection preflight succeeds. `rag search` returns traceable chunks when the paper has relevant indexed content.
+- Recovery note: if `paper_chunks` was created by an earlier failed `COSINE` run and cannot load, restart `milvus-server` and manually drop/recreate that collection before re-running `rag index`.
+- Record: ___
+
 ## RAG Workflow and CLI Commands
 
 - Feature: CLI access to local RAG status, indexing, deletion, and retrieval.
@@ -79,7 +100,7 @@ uv run python -c "from argupaper.services.rag import PaperChunker; text='# Metho
 
 - Feature: Milvus vector store wraps dense chunk upsert, search, and delete-by-paper.
 - Scenario: Verify lazy construction, validation failures, and real Milvus storage when the configured URI is available.
-- Preconditions: `uv sync` has been run. For real storage smoke, configure a usable `MILVUS_URI`; on Windows, local Milvus Lite may fail and should produce a readable `ExternalServiceError`.
+- Preconditions: `uv sync` has been run. For real storage smoke, configure a usable `MILVUS_URI`; on Windows, prefer `http://localhost:19530` with `milvus-server` because local Milvus Lite file URIs may fail and should produce a readable `ExternalServiceError`.
 - Steps:
 
 ```powershell
@@ -88,8 +109,8 @@ uv run python -c "from argupaper.config import load_config; from argupaper.servi
 uv run python -c "from argupaper.config import load_config; from argupaper.services.rag import build_milvus_vector_store; from argupaper.workflows.errors import InputValidationError; c=load_config(require_pdf_api_key=False); store=build_milvus_vector_store(c.rag);`ntry:`n    store.delete_by_paper(\"x' or true\")`nexcept InputValidationError as exc:`n    print(type(exc).__name__, str(exc))"
 ```
 
-- Optional real storage smoke: create two `MilvusChunk` records with 1024-dimensional vectors, call `upsert()`, verify `search()` returns text and metadata fields, then call `delete_by_paper()` and verify the same paper no longer returns results.
-- Expected result: Lazy construction does not connect to Milvus. Unsafe paper filters raise `InputValidationError`. Unavailable Milvus raises a readable `ExternalServiceError` instead of failing silently.
+- Optional real storage smoke: create two non-zero `MilvusChunk` records with 1024-dimensional vectors, call `upsert()` against a temporary paper ID, verify `search()` returns text and metadata fields, then call `delete_by_paper()` and verify the same paper no longer returns results. Older Milvus servers may use the internal `insert()` and primary-key delete fallbacks.
+- Expected result: Lazy construction does not connect to Milvus. Unsafe paper filters and all-zero vectors raise `InputValidationError`. Unavailable Milvus raises a readable `ExternalServiceError` instead of failing silently.
 - Record: ___
 
 ## Ollama Embedding Client

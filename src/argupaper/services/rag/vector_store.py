@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -21,8 +22,10 @@ TEXT_MAX_LENGTH = 65535
 METADATA_MAX_LENGTH = 65535
 SECTION_MAX_LENGTH = 1024
 SOURCE_MAX_LENGTH = 2048
+DELETE_PK_BATCH_SIZE = 100
 
 VECTOR_FIELD = "vector"
+VECTOR_METRIC_TYPE = "IP"
 OUTPUT_FIELDS = [
     "chunk_id",
     "paper_id",
@@ -78,6 +81,7 @@ class MilvusVectorStore:
         self.collection_name = self._validate_collection_name(config.collection)
         self._client: Any | None = None
         self._data_type: Any | None = None
+        self._use_insert_fallback: bool | None = None
 
     def ensure_collection(self, dimension: int | None = None) -> None:
         """Create the collection if needed and verify vector dimension."""
@@ -89,6 +93,7 @@ class MilvusVectorStore:
         try:
             if client.has_collection(collection_name=self.collection_name, timeout=self.timeout_seconds):
                 self._validate_existing_dimension(client, expected_dimension)
+                self._ensure_vector_index(client)
                 return
             self._create_collection(client, expected_dimension)
         except (ConfigurationError, ExternalServiceError, InputValidationError):
@@ -110,14 +115,32 @@ class MilvusVectorStore:
 
         self.ensure_collection(dimension)
         client = self._get_client("upsert")
+        if self._should_use_insert_fallback(client):
+            try:
+                self._insert_records(client, records)
+                return len(records)
+            except (ConfigurationError, ExternalServiceError, InputValidationError):
+                raise
+            except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+                raise self._external_error("insert fallback for server version", exc) from exc
         try:
             client.upsert(
                 collection_name=self.collection_name,
                 data=records,
                 timeout=self.timeout_seconds,
             )
+            self._flush_collection(client)
             return len(records)
         except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            if self._is_unsupported_upsert(exc):
+                try:
+                    self._insert_records(client, records)
+                    return len(records)
+                except Exception as insert_exc:  # noqa: BLE001 - convert SDK-specific errors
+                    raise self._external_error(
+                        "insert fallback after unsupported upsert",
+                        insert_exc,
+                    ) from insert_exc
             raise self._external_error("upsert", exc) from exc
 
     def search(
@@ -129,7 +152,7 @@ class MilvusVectorStore:
     ) -> list[MilvusSearchResult]:
         """Search dense vectors and return chunk payloads."""
 
-        vector = self._validate_vector(query_vector, field_name="query_vector")
+        vector = self._normalize_vector(query_vector, field_name="query_vector")
         if top_k <= 0:
             raise InputValidationError("Milvus search top_k must be greater than 0.")
 
@@ -138,6 +161,7 @@ class MilvusVectorStore:
             if not client.has_collection(collection_name=self.collection_name, timeout=self.timeout_seconds):
                 return []
             self._validate_existing_dimension(client, len(vector))
+            self._load_collection(client)
             expression = self._paper_filter(paper_id) if paper_id is not None else ""
             results = client.search(
                 collection_name=self.collection_name,
@@ -146,7 +170,7 @@ class MilvusVectorStore:
                 filter=expression,
                 limit=top_k,
                 output_fields=OUTPUT_FIELDS,
-                search_params={"metric_type": "COSINE", "params": {}},
+                search_params={"metric_type": VECTOR_METRIC_TYPE, "params": {}},
                 timeout=self.timeout_seconds,
             )
         except (ConfigurationError, ExternalServiceError, InputValidationError):
@@ -159,21 +183,16 @@ class MilvusVectorStore:
     def delete_by_paper(self, paper_id: str) -> int | None:
         """Delete all chunks for one paper."""
 
-        expression = self._paper_filter(paper_id)
+        self._validate_paper_id(paper_id)
         client = self._get_client("delete by paper")
         try:
             if not client.has_collection(collection_name=self.collection_name, timeout=self.timeout_seconds):
                 return 0
-            result = client.delete(
-                collection_name=self.collection_name,
-                filter=expression,
-                timeout=self.timeout_seconds,
-            )
+            return self._delete_by_paper_via_primary_keys(client, paper_id)
         except (ConfigurationError, ExternalServiceError, InputValidationError):
             raise
         except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
             raise self._external_error("delete by paper", exc) from exc
-        return self._deleted_count(result)
 
     def close(self) -> None:
         """Close the underlying Milvus client when supported."""
@@ -259,14 +278,106 @@ class MilvusVectorStore:
         )
         schema.add_field(field_name=VECTOR_FIELD, datatype=self._data_type.FLOAT_VECTOR, dim=dimension)
 
-        index_params = client.prepare_index_params()
-        index_params.add_index(field_name=VECTOR_FIELD, metric_type="COSINE")
         client.create_collection(
             collection_name=self.collection_name,
             schema=schema,
-            index_params=index_params,
+            index_params=self._vector_index_params(client),
             timeout=self.timeout_seconds,
         )
+
+    def _ensure_vector_index(self, client: Any) -> None:
+        try:
+            indexes = client.list_indexes(
+                collection_name=self.collection_name,
+                timeout=self.timeout_seconds,
+            )
+        except TypeError:
+            indexes = client.list_indexes(collection_name=self.collection_name)
+
+        if self._has_vector_index(indexes):
+            return
+
+        try:
+            client.create_index(
+                collection_name=self.collection_name,
+                index_params=self._vector_index_params(client),
+                timeout=self.timeout_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            raise self._external_error("ensure vector index", exc) from exc
+
+    def _vector_index_params(self, client: Any) -> Any:
+        index_params = client.prepare_index_params()
+        index_params.add_index(field_name=VECTOR_FIELD, metric_type=VECTOR_METRIC_TYPE)
+        return index_params
+
+    def _has_vector_index(self, indexes: Any) -> bool:
+        if not indexes:
+            return False
+        if all(isinstance(index, str) for index in indexes):
+            return True
+        for index in indexes:
+            if isinstance(index, str) and index == VECTOR_FIELD:
+                return True
+            if isinstance(index, dict) and index.get("field_name") == VECTOR_FIELD:
+                return True
+        return False
+
+    def _flush_collection(self, client: Any) -> None:
+        flush = getattr(client, "flush", None)
+        if not callable(flush):
+            return
+        try:
+            self._call_collection_method(flush)
+        except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            raise self._external_error("flush collection", exc) from exc
+
+    def _load_collection(self, client: Any) -> None:
+        load_collection = getattr(client, "load_collection", None)
+        if not callable(load_collection):
+            return
+        try:
+            self._call_collection_method(load_collection)
+        except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            raise self._external_error("load collection", exc) from exc
+
+    def _call_collection_method(self, method: Any) -> None:
+        try:
+            method(collection_name=self.collection_name, timeout=self.timeout_seconds)
+        except TypeError:
+            method(collection_name=self.collection_name)
+
+    def _insert_records(self, client: Any, records: list[dict[str, Any]]) -> None:
+        client.insert(
+            collection_name=self.collection_name,
+            data=records,
+            timeout=self.timeout_seconds,
+        )
+        self._flush_collection(client)
+
+    def _should_use_insert_fallback(self, client: Any) -> bool:
+        if self._use_insert_fallback is not None:
+            return self._use_insert_fallback
+
+        get_server_version = getattr(client, "get_server_version", None)
+        if not callable(get_server_version):
+            self._use_insert_fallback = False
+            return self._use_insert_fallback
+
+        try:
+            version = str(get_server_version())
+        except Exception:
+            self._use_insert_fallback = False
+            return self._use_insert_fallback
+
+        match = re.search(r"v?(\d+)\.(\d+)", version)
+        if match is None:
+            self._use_insert_fallback = False
+        else:
+            major = int(match.group(1))
+            minor = int(match.group(2))
+            self._use_insert_fallback = (major, minor) < (2, 3)
+        return self._use_insert_fallback
 
     def _validate_existing_dimension(self, client: Any, expected_dimension: int) -> None:
         description = client.describe_collection(
@@ -305,7 +416,7 @@ class MilvusVectorStore:
         text = self._validate_nonempty_text(chunk.text, "text", TEXT_MAX_LENGTH)
         if chunk.chunk_index < 0:
             raise InputValidationError("Milvus chunk_index must be greater than or equal to 0.")
-        vector = self._validate_vector(chunk.vector, field_name=f"vector for chunk {chunk_id}")
+        vector = self._normalize_vector(chunk.vector, field_name=f"vector for chunk {chunk_id}")
         metadata_json = self._metadata_to_json(chunk.metadata)
         section = self._validate_optional_text(chunk.section, "section", SECTION_MAX_LENGTH)
         source = self._validate_optional_text(chunk.source, "source", SOURCE_MAX_LENGTH)
@@ -374,6 +485,57 @@ class MilvusVectorStore:
     def _paper_filter(self, paper_id: str) -> str:
         return f"paper_id == '{self._validate_paper_id(paper_id)}'"
 
+    def _chunk_id_filter(self, chunk_ids: list[str]) -> str:
+        if not chunk_ids:
+            raise InputValidationError("Milvus chunk_id filter requires at least one chunk_id.")
+        encoded_ids = ", ".join(json.dumps(chunk_id) for chunk_id in chunk_ids)
+        return f"chunk_id in [{encoded_ids}]"
+
+    def _delete_by_paper_via_primary_keys(self, client: Any, paper_id: str) -> int | None:
+        chunk_ids = self._query_chunk_ids_by_paper(client, paper_id)
+        if not chunk_ids:
+            return 0
+
+        total_deleted = 0
+        saw_unknown_count = False
+        for start in range(0, len(chunk_ids), DELETE_PK_BATCH_SIZE):
+            batch = chunk_ids[start : start + DELETE_PK_BATCH_SIZE]
+            try:
+                result = client.delete(
+                    collection_name=self.collection_name,
+                    filter=self._chunk_id_filter(batch),
+                    timeout=self.timeout_seconds,
+                )
+            except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+                raise self._external_error("delete by paper primary-key fallback", exc) from exc
+            deleted_count = self._deleted_count(result)
+            if deleted_count is None:
+                saw_unknown_count = True
+            else:
+                total_deleted += deleted_count
+        return None if saw_unknown_count else total_deleted
+
+    def _query_chunk_ids_by_paper(self, client: Any, paper_id: str) -> list[str]:
+        try:
+            self._load_collection(client)
+            rows = client.query(
+                collection_name=self.collection_name,
+                filter=self._paper_filter(paper_id),
+                output_fields=["chunk_id"],
+                limit=16384,
+                timeout=self.timeout_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            raise self._external_error("query chunk ids for delete fallback", exc) from exc
+
+        chunk_ids: list[str] = []
+        for row in rows or []:
+            if isinstance(row, dict):
+                chunk_id = str(row.get("chunk_id", "")).strip()
+                if chunk_id:
+                    chunk_ids.append(chunk_id)
+        return chunk_ids
+
     def _validate_paper_id(self, paper_id: str) -> str:
         value = self._validate_nonempty_text(paper_id, "paper_id", PAPER_ID_MAX_LENGTH)
         if not PAPER_ID_PATTERN.fullmatch(value):
@@ -405,8 +567,20 @@ class MilvusVectorStore:
                 raise InputValidationError(
                     f"Milvus {field_name} contains a non-numeric value at index {index}."
                 )
-            normalized.append(float(value))
+            numeric_value = float(value)
+            if not math.isfinite(numeric_value):
+                raise InputValidationError(
+                    f"Milvus {field_name} contains a non-finite value at index {index}."
+                )
+            normalized.append(numeric_value)
         return normalized
+
+    def _normalize_vector(self, vector: list[float], *, field_name: str) -> list[float]:
+        values = self._validate_vector(vector, field_name=field_name)
+        norm = math.sqrt(sum(value * value for value in values))
+        if norm == 0.0:
+            raise InputValidationError(f"Milvus {field_name} must not be an all-zero vector.")
+        return [value / norm for value in values]
 
     def _validate_nonempty_text(self, value: str, field_name: str, max_length: int) -> str:
         normalized = str(value or "").strip()
@@ -430,6 +604,12 @@ class MilvusVectorStore:
                 if key in result:
                     return int(result[key])
         return None
+
+    def _is_unsupported_upsert(self, exc: Exception) -> bool:
+        message = str(exc)
+        return "Upsert" in message and (
+            "UNIMPLEMENTED" in message or "unknown method Upsert" in message
+        )
 
     def _ensure_local_uri_parent(self, uri: str) -> None:
         if uri.endswith(".db") and "://" not in uri:
