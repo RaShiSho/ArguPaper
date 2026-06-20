@@ -1,5 +1,15 @@
 # DONE
 
+## Ollama Embedding Client
+
+Completed: 2026-06-20
+
+- Added `OllamaEmbeddingClient` for Ollama `/api/embed` calls using the configured embedding model.
+- The client supports single-text and batch embedding generation, validates empty inputs, and normalizes embedding values to floats.
+- HTTP sessions are created lazily during embedding calls; importing the module, loading config, and constructing the client do not connect to Ollama.
+- Added a lazy `build_ollama_embedding_client()` factory under `argupaper.services.rag.init`.
+- No chunking, Milvus writes, Agent tools, or slash command behavior was added.
+
 ## RAG Configuration Layer
 
 Completed: 2026-06-20

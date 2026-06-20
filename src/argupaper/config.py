@@ -7,7 +7,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-from argupaper.services.rag import MilvusConfig, OllamaEmbeddingConfig, RAGConfig
+from argupaper.services.rag.config import MilvusConfig, OllamaEmbeddingConfig, RAGConfig
 from argupaper.workflows.errors import ConfigurationError
 
 # Load .env file

@@ -1,5 +1,21 @@
 # SMOKE
 
+## Ollama Embedding Client
+
+- Feature: Ollama embedding client calls the local `bge-m3` model through `/api/embed`.
+- Scenario: Verify lazy construction and a real local embedding request.
+- Preconditions: `uv sync` has been run. Local Ollama is running and has the `bge-m3` model installed.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.config import load_config; from argupaper.services.rag import build_ollama_embedding_client; c=load_config(require_pdf_api_key=False); client=build_ollama_embedding_client(c.rag); print(type(client).__name__)"
+uv run python -c "import asyncio`nfrom argupaper.config import load_config`nfrom argupaper.services.rag import build_ollama_embedding_client`nasync def main():`n    c = load_config(require_pdf_api_key=False)`n    client = build_ollama_embedding_client(c.rag)`n    emb = await client.embed_text('retrieval augmented generation')`n    print(len(emb), emb[:3])`n    await client.close()`nasyncio.run(main())"
+```
+
+- Expected result: The lazy construction command prints `OllamaEmbeddingClient` without requiring a request. The embedding command prints a positive vector dimension and float preview. If Ollama is stopped, the error should be a readable `ExternalServiceError`; empty input should raise `InputValidationError`.
+- Record: ___
+
 ## RAG Configuration Layer
 
 - Feature: RAG configuration can be loaded without connecting to external services.
