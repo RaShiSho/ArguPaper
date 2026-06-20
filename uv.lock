@@ -179,6 +179,7 @@ dependencies = [
     { name = "langchain-community" },
     { name = "langchain-core" },
     { name = "langgraph" },
+    { name = "milvus" },
     { name = "prompt-toolkit" },
     { name = "pydantic" },
     { name = "pymilvus", extra = ["milvus-lite"] },
@@ -197,6 +198,7 @@ requires-dist = [
     { name = "langchain-community", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },
     { name = "langgraph", specifier = ">=0.2.0" },
+    { name = "milvus", specifier = "==2.2.16" },
     { name = "prompt-toolkit", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pymilvus", extras = ["milvus-lite"], specifier = ">=2.5.0" },
@@ -362,8 +364,8 @@ name = "faiss-cpu"
 version = "1.14.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy" },
-    { name = "packaging" },
+    { name = "numpy", marker = "sys_platform != 'win32'" },
+    { name = "packaging", marker = "sys_platform != 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/83/b0/48c083d01b7b68c463c1d56507147a9d733f791e1c469a77215a872a9fb5/faiss_cpu-1.14.3-cp310-abi3-macosx_14_0_arm64.whl", hash = "sha256:a9369863290a3f0e033757e4c10577b6ef7431f1cede394dabd0a137e4e2ed45", size = 4768290 },
@@ -875,14 +877,25 @@ wheels = [
 ]
 
 [[package]]
+name = "milvus"
+version = "2.2.16"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/74/2fa37a139f733677839f0ea08d7cb633d3da497d87efa3afcdd4a3ab4c6d/milvus-2.2.16-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:ada1fef174aa42d5117b4a784a48f9106141df8e799bccd7092ad88f4a34f67c", size = 31576125 },
+    { url = "https://files.pythonhosted.org/packages/b4/1a/a4dea28ab1908fb704f612ff0cb04a405321824044c3279941c5d6a94791/milvus-2.2.16-py3-none-macosx_11_0_arm64.whl", hash = "sha256:8df249e791758a94a3e3b6606e6efa6cda136eadf718dd37053b58729173f64e", size = 27953990 },
+    { url = "https://files.pythonhosted.org/packages/8b/d1/a1cc667024b1cc033033e345fe39072af8dc0eb4fd75dee293ab2283eb59/milvus-2.2.16-py3-none-manylinux2014_x86_64.whl", hash = "sha256:ea5bd32251b7bcad629d7e46c307414a586c96b4a50491d04a08db42fca8fba9", size = 42065083 },
+    { url = "https://files.pythonhosted.org/packages/ab/8f/2a24d629f194c1bc83725652a9341794fbab09d0de978d5e5ec72e1f80e4/milvus-2.2.16-py3-none-win_amd64.whl", hash = "sha256:f906990a6d7bbb5955bb03541992d0072ed213f8665c1101b003cea995cb97d9", size = 38579957 },
+]
+
+[[package]]
 name = "milvus-lite"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "faiss-cpu" },
-    { name = "grpcio" },
-    { name = "numpy" },
-    { name = "pyarrow" },
+    { name = "faiss-cpu", marker = "sys_platform != 'win32'" },
+    { name = "grpcio", marker = "sys_platform != 'win32'" },
+    { name = "numpy", marker = "sys_platform != 'win32'" },
+    { name = "pyarrow", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a3/9a/d80d260e6fe1246818a8ef782c374ba9c6ca46ca3b987c14eabe914ef805/milvus_lite-3.0.tar.gz", hash = "sha256:2c35d0d046b1faae3402cde1fb73d65f51ee8c6aba65f54de1dda46f7bb18b9b", size = 589749 }
 wheels = [
