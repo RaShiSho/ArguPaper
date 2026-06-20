@@ -18,6 +18,7 @@ class RAGStatusResult(BaseModel):
     chunk_overlap: int
     include_references: bool
     vector_dim: int
+    run_log_path: str | None = None
 
 
 class RAGIndexResult(BaseModel):
@@ -29,6 +30,7 @@ class RAGIndexResult(BaseModel):
     skipped_sections: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     dry_run: bool = False
+    run_log_path: str | None = None
 
 
 class RAGDeleteResult(BaseModel):
@@ -37,6 +39,7 @@ class RAGDeleteResult(BaseModel):
     paper_id: str
     deleted_count: int | None = None
     warnings: list[str] = Field(default_factory=list)
+    run_log_path: str | None = None
 
 
 class RAGSearchResult(BaseModel):
@@ -48,6 +51,7 @@ class RAGSearchResult(BaseModel):
     chunks: list[RetrievedChunk] = Field(default_factory=list)
     context: str = ""
     warnings: list[str] = Field(default_factory=list)
+    run_log_path: str | None = None
 
 
 __all__ = ["RAGDeleteResult", "RAGIndexResult", "RAGSearchResult", "RAGStatusResult"]

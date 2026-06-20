@@ -81,6 +81,7 @@ class ConfigStatusResponse(BaseModel):
     search_log_path: str
     convert_log_path: str
     web_log_path: str
+    rag_log_path: str
     analyze_retrieval_loop_enabled: bool
 
 

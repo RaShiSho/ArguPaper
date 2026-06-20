@@ -18,6 +18,7 @@ uv run argupaper rag delete <paper_id>
 ```
 
 - Expected result: `rag status` succeeds without external services. `rag index --dry-run` parses and chunks only. `rag search` defaults to full-library search unless `--paper-id` is provided; empty results show a warning, not a command failure.
+- Logging expectation: each `argupaper rag ...` command prints progress messages and a `RAG log:` path, and `data/logs/rag/` contains a JSONL run log with `run_start` and `run_summary` events.
 - Record: ___
 
 ## RAG Retriever and Context Builder
@@ -354,7 +355,7 @@ uv run uvicorn argupaper.web.app:app --port 8000
 Invoke-RestMethod http://127.0.0.1:8000/api/config/status
 ```
 
-- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path`、`log_path`、`search_log_path`、`convert_log_path`、`web_log_path` 等字段；不返回任何 API key 明文；`data/logs/web/web-backend.log` 存在并记录后端启动或请求日志
+- 预期结果：接口返回 `mineru_api_configured`、`semantic_scholar_configured`、`serpapi_configured`、`paper_storage_path`、`cache_path`、`log_path`、`search_log_path`、`convert_log_path`、`web_log_path`、`rag_log_path` 等字段；不返回任何 API key 明文；`data/logs/web/web-backend.log` 存在并记录后端启动或请求日志
 - 记录：____
 
 ### 16. 本地 Web 工作台前端启动

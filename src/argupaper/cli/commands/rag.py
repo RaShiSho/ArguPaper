@@ -31,7 +31,7 @@ def status() -> None:
 
     try:
         workflow = build_rag_workflow()
-        _format_status(workflow.status())
+        _format_status(workflow.status(progress_callback=_print_progress))
     except Exception as exc:
         console.print(format_error(exc))
         raise typer.Exit(code=1)
@@ -52,7 +52,8 @@ def index(
                 RAGIndexOptions(
                     paper_id=paper_id,
                     dry_run=dry_run,
-                )
+                ),
+                progress_callback=_print_progress,
             )
         )
         _format_index_result(result)
@@ -73,7 +74,12 @@ def delete(
     workflow = None
     try:
         workflow = build_rag_workflow()
-        result = asyncio.run(workflow.delete_paper(RAGDeleteOptions(paper_id=paper_id)))
+        result = asyncio.run(
+            workflow.delete_paper(
+                RAGDeleteOptions(paper_id=paper_id),
+                progress_callback=_print_progress,
+            )
+        )
         _format_delete_result(result)
     except Exception as exc:
         console.print(format_error(exc))
@@ -124,7 +130,8 @@ def search(
                     section_type=section_type,
                     score_threshold=score_threshold,
                     context_max_chars=context_max_chars,
-                )
+                ),
+                progress_callback=_print_progress,
             )
         )
         _format_search_result(result, show_context=show_context)
@@ -155,6 +162,7 @@ def _format_status(result: RAGStatusResult) -> None:
     for key, value in rows.items():
         table.add_row(key, value)
     console.print(table)
+    _print_log_path(result.run_log_path)
 
 
 def _format_index_result(result: RAGIndexResult) -> None:
@@ -171,6 +179,7 @@ def _format_index_result(result: RAGIndexResult) -> None:
     console.print(table)
     for warning in result.warnings:
         console.print(format_warning(warning))
+    _print_log_path(result.run_log_path)
 
 
 def _format_delete_result(result: RAGDeleteResult) -> None:
@@ -184,6 +193,7 @@ def _format_delete_result(result: RAGDeleteResult) -> None:
     console.print(table)
     for warning in result.warnings:
         console.print(format_warning(warning))
+    _print_log_path(result.run_log_path)
 
 
 def _format_search_result(result: RAGSearchResult, *, show_context: bool) -> None:
@@ -192,6 +202,7 @@ def _format_search_result(result: RAGSearchResult, *, show_context: bool) -> Non
             console.print(format_warning(warning))
     if not result.chunks:
         console.print("[dim]No RAG chunks found.[/dim]")
+        _print_log_path(result.run_log_path)
         return
 
     table = Table(title="RAG Search Results", show_header=True, header_style="bold cyan", show_lines=True)
@@ -217,6 +228,16 @@ def _format_search_result(result: RAGSearchResult, *, show_context: bool) -> Non
     if show_context and result.context:
         console.print("\n[bold cyan]Context[/bold cyan]")
         console.print(result.context)
+    _print_log_path(result.run_log_path)
+
+
+def _print_progress(message: str) -> None:
+    console.print(f"[dim]{message}[/dim]")
+
+
+def _print_log_path(log_path: str | None) -> None:
+    if log_path:
+        console.print(f"[dim]RAG log: {log_path}[/dim]")
 
 
 def _page_label(page_start: int | None, page_end: int | None) -> str:

@@ -8,6 +8,7 @@ Completed: 2026-06-20
 - Added `argupaper rag` with `status`, `index`, `delete`, and `search` subcommands.
 - `rag search` defaults to full-library search and supports optional `--paper-id` filtering.
 - `rag status` reports configuration without connecting to Ollama or Milvus.
+- RAG CLI commands now print runtime progress messages and write JSONL run logs under `RAG_LOG_PATH`, defaulting to `data/logs/rag/`.
 - No Agent graph, chat slash command, or responder behavior was changed.
 
 ## RAG Retriever and Context Builder
@@ -161,6 +162,7 @@ Completed: 2026-06-20
 - 现有 `PapersWorkflow`、`AnalyzeWorkflow`、`InteractiveSearchWorkflow` 与 PaperStore 读取被封装为 LangChain tools，chat 不重写业务逻辑。
 - CLI 只负责 prompt-toolkit 交互、Rich 输出、`/exit`、任务运行锁和 ESC 最佳努力中断。
 - 新增 `CHAT_LOG_PATH`，默认写入 `data/logs/chat/`，每次会话生成 JSONL 审计日志。
+- 新增 `RAG_LOG_PATH`，默认写入 `data/logs/rag/`，RAG CLI 每次运行生成 JSONL 运行日志。
 - README 与 `docs/SMOKE.md` 已补充 chat 使用方式、降级行为、日志路径和手工验收场景。
 
 ## Convert 结果进入 PaperStore

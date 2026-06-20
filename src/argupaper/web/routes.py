@@ -153,6 +153,7 @@ async def get_config_status() -> ConfigStatusResponse:
         search_log_path=config.log.search_path,
         convert_log_path=config.log.convert_path,
         web_log_path=config.log.web_path,
+        rag_log_path=config.log.rag_path,
         analyze_retrieval_loop_enabled=config.analyze_enable_retrieval_loop,
     )
 
