@@ -1,5 +1,22 @@
 # SMOKE
 
+## Milvus Vector Store
+
+- Feature: Milvus vector store wraps dense chunk upsert, search, and delete-by-paper.
+- Scenario: Verify lazy construction, validation failures, and real Milvus storage when the configured URI is available.
+- Preconditions: `uv sync` has been run. For real storage smoke, configure a usable `MILVUS_URI`; on Windows, local Milvus Lite may fail and should produce a readable `ExternalServiceError`.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.config import load_config; from argupaper.services.rag import build_milvus_vector_store; c=load_config(require_pdf_api_key=False); store=build_milvus_vector_store(c.rag); print(type(store).__name__, c.rag.vector_dim)"
+uv run python -c "from argupaper.config import load_config; from argupaper.services.rag import build_milvus_vector_store; from argupaper.workflows.errors import InputValidationError; c=load_config(require_pdf_api_key=False); store=build_milvus_vector_store(c.rag);`ntry:`n    store.delete_by_paper(\"x' or true\")`nexcept InputValidationError as exc:`n    print(type(exc).__name__, str(exc))"
+```
+
+- Optional real storage smoke: create two `MilvusChunk` records with 1024-dimensional vectors, call `upsert()`, verify `search()` returns text and metadata fields, then call `delete_by_paper()` and verify the same paper no longer returns results.
+- Expected result: Lazy construction does not connect to Milvus. Unsafe paper filters raise `InputValidationError`. Unavailable Milvus raises a readable `ExternalServiceError` instead of failing silently.
+- Record: ___
+
 ## Ollama Embedding Client
 
 - Feature: Ollama embedding client calls the local `bge-m3` model through `/api/embed`.
@@ -25,10 +42,10 @@ uv run python -c "import asyncio`nfrom argupaper.config import load_config`nfrom
 
 ```powershell
 uv run python -m compileall src/argupaper
-uv run python -c "from argupaper.config import load_config; c=load_config(require_pdf_api_key=False); print(c.rag_enabled, c.rag.embedding.base_url, c.rag.embedding.model, c.rag.milvus.uri, c.rag.milvus.collection, c.rag.top_k, c.rag.chunk_size, c.rag.chunk_overlap)"
+uv run python -c "from argupaper.config import load_config; c=load_config(require_pdf_api_key=False); print(c.rag_enabled, c.rag.embedding.base_url, c.rag.embedding.model, c.rag.milvus.uri, c.rag.milvus.collection, c.rag.top_k, c.rag.chunk_size, c.rag.chunk_overlap, c.rag.vector_dim)"
 ```
 
-- Expected result: The command prints default RAG settings without network or database connection errors. Defaults are `False`, `http://localhost:11434`, `bge-m3`, `./data/milvus.db`, `paper_chunks`, `6`, `800`, and `120`.
+- Expected result: The command prints default RAG settings without network or database connection errors. Defaults are `False`, `http://localhost:11434`, `bge-m3`, `./data/milvus.db`, `paper_chunks`, `6`, `800`, `120`, and `1024`.
 - Record: ___
 
 本文件是项目唯一的手工 smoke 验收入口。

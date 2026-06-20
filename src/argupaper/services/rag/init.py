@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from argupaper.services.rag.config import RAGConfig
 from argupaper.services.rag.embedding import OllamaEmbeddingClient
+from argupaper.services.rag.vector_store import MilvusVectorStore
 
 
 @dataclass(frozen=True)
@@ -32,8 +33,15 @@ def build_ollama_embedding_client(config: RAGConfig) -> OllamaEmbeddingClient:
     return OllamaEmbeddingClient(config.embedding)
 
 
+def build_milvus_vector_store(config: RAGConfig) -> MilvusVectorStore:
+    """Build a Milvus vector store without opening external connections."""
+
+    return MilvusVectorStore(config.milvus, default_dimension=config.vector_dim)
+
+
 __all__ = [
     "RAGServiceSettings",
+    "build_milvus_vector_store",
     "build_ollama_embedding_client",
     "build_rag_service_settings",
 ]

@@ -1,5 +1,15 @@
 # DONE
 
+## Milvus Vector Store
+
+Completed: 2026-06-20
+
+- Added `MilvusVectorStore` for dense-vector paper chunk storage using Milvus.
+- The store encapsulates collection creation, upsert, search, and delete-by-paper operations behind the RAG service layer.
+- Added safe collection and paper-id validation so filter expressions are generated only from validated values.
+- Added `RAG_VECTOR_DIM` with a default of `1024` and a lazy `build_milvus_vector_store()` factory.
+- No hybrid retrieval, Agent tool registration, chunking, or slash command behavior was added.
+
 ## Ollama Embedding Client
 
 Completed: 2026-06-20

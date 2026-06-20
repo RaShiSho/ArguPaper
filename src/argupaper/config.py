@@ -184,6 +184,7 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
             top_k=int(os.getenv("RAG_TOP_K", "6")),
             chunk_size=int(os.getenv("RAG_CHUNK_SIZE", "800")),
             chunk_overlap=int(os.getenv("RAG_CHUNK_OVERLAP", "120")),
+            vector_dim=int(os.getenv("RAG_VECTOR_DIM", "1024")),
             milvus=MilvusConfig(
                 uri=os.getenv("MILVUS_URI", "./data/milvus.db"),
                 collection=os.getenv("MILVUS_COLLECTION", "paper_chunks"),
