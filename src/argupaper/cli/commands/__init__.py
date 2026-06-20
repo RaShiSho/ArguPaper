@@ -13,6 +13,7 @@ from argupaper.cli.commands.common import (
 from argupaper.cli.commands.convert import convert
 from argupaper.cli.commands.debate import debate
 from argupaper.cli.commands.papers import papers
+from argupaper.cli.commands.rag import rag_app
 from argupaper.cli.commands.search import search
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "convert",
     "debate",
     "papers",
+    "rag_app",
     "resolve_analyze_output_path",
     "resolve_auto_report_path",
     "resolve_convert_output_path",

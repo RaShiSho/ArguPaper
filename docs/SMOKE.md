@@ -1,5 +1,25 @@
 # SMOKE
 
+## RAG Workflow and CLI Commands
+
+- Feature: CLI access to local RAG status, indexing, deletion, and retrieval.
+- Scenario: Verify the `argupaper rag` command group, lazy status, dry-run indexing, optional paper-scoped retrieval, and delete behavior.
+- Preconditions: `uv sync` has been run. `rag index` without `--dry-run`, `rag delete`, and `rag search` require usable Ollama/Milvus setup and indexed chunks.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper rag --help
+uv run argupaper rag status
+uv run argupaper rag index <paper_id> --dry-run
+uv run argupaper rag search "method details" --paper-id <paper_id>
+uv run argupaper rag search "agent safety" --top-k 3
+uv run argupaper rag delete <paper_id>
+```
+
+- Expected result: `rag status` succeeds without external services. `rag index --dry-run` parses and chunks only. `rag search` defaults to full-library search unless `--paper-id` is provided; empty results show a warning, not a command failure.
+- Record: ___
+
 ## RAG Retriever and Context Builder
 
 - Feature: Retrieve indexed paper chunks and render traceable LLM context.

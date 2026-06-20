@@ -9,6 +9,7 @@ from argupaper.memory.paper_store import PaperStore
 from argupaper.workflows import AnalyzeWorkflow
 from argupaper.workflows.convert import ConvertWorkflow
 from argupaper.workflows.papers import PapersWorkflow
+from argupaper.workflows.rag import RAGWorkflow
 from argupaper.workflows.search import InteractiveSearchWorkflow
 
 console = Console()
@@ -48,6 +49,13 @@ def build_papers_workflow() -> PapersWorkflow:
     """Construct the default saved-paper workflow."""
 
     return PapersWorkflow(build_paper_store())
+
+
+def build_rag_workflow() -> RAGWorkflow:
+    """Construct the default local RAG workflow."""
+
+    config = load_config(require_pdf_api_key=False)
+    return RAGWorkflow(config)
 
 
 def build_convert_pipeline(config: Config):
@@ -90,6 +98,7 @@ __all__ = [
     "build_convert_workflow",
     "build_paper_store",
     "build_papers_workflow",
+    "build_rag_workflow",
     "build_search_workflow",
     "console",
     "resolve_analyze_output_path",

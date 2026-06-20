@@ -24,6 +24,16 @@ if TYPE_CHECKING:
         SearchWorkflowResult,
     )
     from argupaper.workflows.papers import PapersOptions, PapersWorkflow, PapersWorkflowResult
+    from argupaper.workflows.rag import (
+        RAGDeleteOptions,
+        RAGDeleteResult,
+        RAGIndexOptions,
+        RAGIndexResult,
+        RAGSearchOptions,
+        RAGSearchResult,
+        RAGStatusResult,
+        RAGWorkflow,
+    )
     from argupaper.workflows.search import InteractiveSearchWorkflow, SearchWorkflow
 
 __all__ = [
@@ -41,6 +51,14 @@ __all__ = [
     "PapersOptions",
     "PapersWorkflow",
     "PapersWorkflowResult",
+    "RAGDeleteOptions",
+    "RAGDeleteResult",
+    "RAGIndexOptions",
+    "RAGIndexResult",
+    "RAGSearchOptions",
+    "RAGSearchResult",
+    "RAGStatusResult",
+    "RAGWorkflow",
     "SearchAgentResult",
     "SearchClarification",
     "SearchFilters",
@@ -69,6 +87,19 @@ def __getattr__(name: str) -> Any:
         from argupaper.workflows import papers
 
         return getattr(papers, name)
+    if name in {
+        "RAGDeleteOptions",
+        "RAGDeleteResult",
+        "RAGIndexOptions",
+        "RAGIndexResult",
+        "RAGSearchOptions",
+        "RAGSearchResult",
+        "RAGStatusResult",
+        "RAGWorkflow",
+    }:
+        from argupaper.workflows import rag
+
+        return getattr(rag, name)
     if name in {"InteractiveSearchWorkflow", "SearchWorkflow"}:
         from argupaper.workflows import search
 

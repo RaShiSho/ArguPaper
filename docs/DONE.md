@@ -1,5 +1,15 @@
 # DONE
 
+## RAG Workflow and CLI Commands
+
+Completed: 2026-06-20
+
+- Added `RAGWorkflow` as the workflow boundary for local RAG status, indexing, deletion, and search.
+- Added `argupaper rag` with `status`, `index`, `delete`, and `search` subcommands.
+- `rag search` defaults to full-library search and supports optional `--paper-id` filtering.
+- `rag status` reports configuration without connecting to Ollama or Milvus.
+- No Agent graph, chat slash command, or responder behavior was changed.
+
 ## RAG Retriever and Context Builder
 
 Completed: 2026-06-20
