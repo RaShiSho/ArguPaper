@@ -25,7 +25,11 @@ class SearchResult(BaseModel):
 class AnalyzeOptions(BaseModel):
     """Analyze command options."""
 
-    paper_path: Path
+    paper_path: Optional[Path] = None
+    paper_name: Optional[str] = None
+    markdown: Optional[str] = None
+    cache_key: Optional[str] = None
+    source_label: Optional[str] = None
     output_path: Optional[Path] = None
     rounds: int = 3
     force_reconvert: bool = False
@@ -74,7 +78,7 @@ class SearchFilters(BaseModel):
 
 
 class SearchParseResult(BaseModel):
-    """Structured parse output for the search agent."""
+    """Structured parse output for the search workflow."""
 
     raw_request: str
     filters: SearchFilters = Field(default_factory=SearchFilters)

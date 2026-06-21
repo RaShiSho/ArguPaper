@@ -1,23 +1,214 @@
 # DONE
 
-## Evidence Table 实验内容抽取增强
+## Analyze 用户入口重命名为 Debate
 
-完成时间：2026-04-26
+完成时间：2026-06-19
 
-本次通过 OpenSpec change `improve-evidence-table-extraction` 增强了 Evidence Table 的 dataset / metric 抽取能力，解决报告中 Evidence Table 经常为空的问题。
+本次不创建 OpenSpec change，直接将当前用户可见的论文分析入口定位为多 Agent 辩论式论文分析：
 
-主要调整：
+- CLI 入口从 `argupaper analyze` 改为 `argupaper debate`，旧 `analyze` 命令不再注册。
+- Chat slash command 从 `/analyze` 改为 `/debate`，并将 Agent tool 从 `analyze_paper` 改为 `debate_paper`。
+- `debate` 的职责定义为结构化抽取、证据检查、可选补充检索、Support/Skeptic 多轮辩论、共识/分歧判断与 Markdown 报告生成。
+- 普通论文讲解、全文解释和问答继续由 `read_paper_context` / `read_paper_fulltext` + `respond` 处理，不触发 `debate_paper`。
 
-- `StructuredExtractor` 现在会从 experiment、evaluation、results、benchmark、dataset、metrics、empirical、ablation 等实验相关 section 聚合文本。
-- Dataset 抽取从小 allowlist 扩展为 allowlist + pattern 规则，覆盖 GSM8K、HumanEval、MMLU、PubMedQA 等 benchmark-style 名称。
-- Metric 抽取扩展到 EM、mAP、MRR、NDCG、AUROC、MAE、RMSE、ROUGE-L、pass@1 等常见实验指标。
-- `EvidenceChain` 的 Evidence Table row 会使用实验段落中的 support snippet，不再只输出泛化占位文本。
-- 对只有 metric、缺 dataset 的情况保留 `Not specified` 行，避免表格完全空白。
-- 已补充 `docs/SMOKE.md` 的本地 evidence extraction smoke。
+## Chat 论文全文读取工具
 
-当前验收方式：
+完成时间：2026-06-19
 
-- 参考 [SMOKE.md](/E:/Code/Project/ArguPaper/docs/SMOKE.md) 中的 Evidence Table 非 allowlist 抽取表单执行手工验收。
+本次基于 OpenSpec change `add-read-paper-fulltext-tool` 为 chat Agent 增加本地论文全文读取能力：
+
+- 新增共享工具 `read_paper_fulltext`，从 PaperStore 读取本地 `paper.md`，默认返回完整 markdown 到 Agent runtime 内存。
+- 用户明确要求“全文 / 完整 / 详细 / 逐节 / 具体内容”时，chat 可优先使用全文工具；普通概览仍保留 `read_paper_context` 摘录路径。
+- CLI 最终回答默认不打印完整 markdown，而是给出读取状态、字符数、hash 和本地 `paper.md` 路径。
+- chat JSONL 日志对全文 observation 脱敏，不保存原始 `markdown` / `report` 内容。
+
+## Chat Respond LLM 总结
+
+完成时间：2026-06-19
+
+本次基于 OpenSpec change `add-llm-backed-chat-respond-node` 将 chat 的 `respond` 节点升级为 observation-grounded responder：
+
+- 当工具已经返回 observations 且没有现成 `final_response` 时，`respond` 会调用 default LLM 基于工具结果生成最终回答。
+- `read_paper_context` 成功后不再只返回 `Loaded context...`，而是交给 responder 根据论文上下文生成内容阐述。
+- ReAct 已有成功 observation 但后续输出非 JSON 时，会路由到 `respond` 收口，不直接 fallback。
+- `/papers`、`/use`、`/analyze` 等已有 slash command 响应继续保留确定性结果。
+- responder LLM 不可用、失败或返回空内容时，降级为原有工具摘要，并写入 `respond_llm_failed` / `respond_fallback_used` 日志事件。
+
+## Chat 本地优先与工具调用稳定化
+
+完成时间：2026-06-19
+
+本次基于 OpenSpec change `stabilize-chat-local-first-tool-loop` 完成 chat Agent 第一阶段稳定化：
+
+- `ChatAgentRuntime` 在自然语言进入 LLM Planner 前增加本地优先规则；本地库检索走 `list_papers`，已选论文问题走 `read_paper_context`，明确论文名的问题先走 `select_paper`。
+- `argupaper.tools` registry 新增 schema-aware tool specs，ReAct prompt 现在可以看到工具名、描述、参数字段和必填字段。
+- 工具调用前统一归一化常见参数别名，例如 `select_paper({"query": "BackdoorAgent"})` 会归一化为 `{"paper": "BackdoorAgent"}`。
+- 同一轮 ReAct 中相同 `tool + canonical_json(arguments)` 的重复调用会被阻止并写入 `duplicate_tool_call_blocked` 日志事件。
+- 本次不实现 LLM responder；`read_paper_context` 后仍沿用现有 `_respond()` observation 摘要行为。
+
+## Chat Prompt 统一目录
+
+完成时间：2026-06-19
+
+本次将 `argupaper chat` 的 prompt 文本从运行时代码迁移到 `src/argupaper/prompts/chat_agent/`：
+
+- 新增 planner、ReAct 与 responder 的 system/user prompt 文件，复用现有 `load_prompt()` 读取机制。
+- `ChatAgentRuntime` 继续保持原有 LangGraph 节点与工具调用逻辑，仅把 prompt 来源改为文件。
+- 清理 ReAct prompt 中本地论文库检索示例的乱码文本，保留 LangChain f-string 模板变量和 JSON 花括号转义。
+- 当前 responder prompt 仅作为 prompt 资产保留，不改变 `_respond()` 的现有行为。
+
+## 论文真实标题入库
+
+完成时间：2026-06-08
+
+本次将论文写入 PaperStore 前的标题来源从 PDF 文件名调整为 Markdown 正文解析结果：
+
+- 新增 `PaperTitleResolver`，优先从 Markdown 前部解析真实标题，无法可靠解析时再尝试已配置 LLM，最后回退文件名。
+- `ConvertWorkflow` 写入 converted 记录时不再直接使用 PDF stem，`AnalyzeWorkflow` 也复用同一解析结果作为报告标题、检索 query 与 metadata title。
+- PaperStore metadata 新增 `title_source` 与 `title_confidence`，旧记录保持兼容，不执行自动回填。
+- `docs/SMOKE.md` 已补充真实标题入库的手工验收步骤。
+
+## Chat 统一 Tool 层
+
+完成时间：2026-05-31
+
+本次基于 OpenSpec change `move-chat-tools-to-tool-layer` 将 chat 私有工具实现迁移到统一 `argupaper.tools` 层：
+
+- `argupaper.tools.schemas` 现在包含通用 `ToolResult` envelope 与 chat 所需 input schemas。
+- `ToolRegistry` 支持 `args_schema`，并新增 `LangChainToolbox` 统一适配 LangChain `StructuredTool`、未知工具和异常 observation。
+- `paper_tools` 承载 `list_papers`、`select_paper`、`read_paper_context`，保留本地库宽松关键词检索。
+- `workflow_tools` 承载 `analyze_paper` 与 `search_papers`，继续只封装现有 workflows。
+- `ChatAgentRuntime` 通过 `build_default_toolbox()` 获取工具，`argupaper.agents.chat.tools` 仅保留兼容导出。
+- README 与 `docs/SMOKE.md` 已补充统一工具注册层的扩展与验收说明。
+
+## LangGraph Chat Agent Runtime
+
+完成时间：2026-05-31
+
+本次基于 OpenSpec change `add-langgraph-chat-agent-runtime` 新增 `argupaper chat` 会话型 Agent 入口：
+
+- Chat 主体逻辑位于 `argupaper.agents.chat`，使用 LangGraph 构建 Planner + ReAct Tool Loop + Agent State，未新增 `workflows/chat`。
+- 现有 `PapersWorkflow`、`AnalyzeWorkflow`、`InteractiveSearchWorkflow` 与 PaperStore 读取被封装为 LangChain tools，chat 不重写业务逻辑。
+- CLI 只负责 prompt-toolkit 交互、Rich 输出、`/exit`、任务运行锁和 ESC 最佳努力中断。
+- 新增 `CHAT_LOG_PATH`，默认写入 `data/logs/chat/`，每次会话生成 JSONL 审计日志。
+- README 与 `docs/SMOKE.md` 已补充 chat 使用方式、降级行为、日志路径和手工验收场景。
+
+## Convert 结果进入 PaperStore
+
+完成时间：2026-05-30
+
+本次基于 OpenSpec change `store-converted-papers-in-paper-store` 将 `argupaper convert` 的成功结果同步写入本地 PaperStore，使只完成 Markdown 转换、尚未 analyze 的论文也能通过 `argupaper papers` 和 Web Library 浏览：
+
+- `PaperStore` 新增 converted 记录保存能力，并用互斥的 `library_status` 区分 `converted` 与 `analyzed`。
+- `ConvertWorkflow` 在单文件转换、目录批量转换和 cache hit 场景下都会同步 PaperStore 记录。
+- `AnalyzeWorkflow` 写入 PaperStore 时会将同一 `paper_id` 升级为 `analyzed` 状态。
+- CLI `argupaper papers` 与 Web Library 列表/详情已展示记录状态。
+- `docs/SMOKE.md` 已补充 convert-only 入库、cache hit、analyze 升级和 Web Library 展示的手工验收步骤。
+
+## 运行日志统一目录收口
+
+完成时间：2026-05-30
+
+本次将 search、convert、web 的运行日志统一收敛到 `data/logs/` 下，并按 workflow/功能划分子目录：
+
+- 新增 `LOG_PATH` 配置，默认值为 `DATA_PATH/logs`。
+- Search workflow trace 写入 `LOG_PATH/search/<run-id>/`。
+- Convert 目录批量 JSONL 日志写入 `LOG_PATH/convert/<run-id>.jsonl`。
+- Web 前后端日志写入 `LOG_PATH/web/`。
+- `/api/config/status` 现在返回 `log_path`、`search_log_path`、`convert_log_path` 与 `web_log_path`。
+- README、`.env.example` 与 `docs/SMOKE.md` 已同步新的日志路径。
+
+## Web 工作台日志目录收口
+
+完成时间：2026-05-30
+
+本次将本地 Web 工作台日志从 `data/` 根目录收敛到独立子目录，避免根目录散落运行日志：
+
+- 新增 Web 日志配置，默认位于本地数据目录下的 Web 日志子目录。
+- 后端 FastAPI/Uvicorn 日志会写入 Web 后端日志文件。
+- 前端新增 `npm run dev:log`，将 Vite stdout/stderr 写入 Web 前端日志文件。
+- `/api/config/status` 返回 Web 日志目录，前端侧栏同步显示日志目录。
+- README、`.env.example` 与 `docs/SMOKE.md` 已同步新的日志路径和启动方式。
+
+## v0.3 架构边界重构
+
+完成时间：2026-05-29
+
+本次基于 OpenSpec change `align-v03-architecture` 将项目结构对齐到 v0.3 的 workflow / agent / tool / pipeline / service / domain 分层：
+
+- 新增 `app/`、`services/`、`domain/`、`pipelines/`、`tools/` 等架构包，并将 PDF、retrieval、LLM、reporting 等底层能力迁移到 `services/`。
+- 将 analyze/search/convert/papers 固定任务流整理到 `workflows/` 子包，CLI/Web 继续复用 workflow。
+- 将 Support/Skeptic/Comparator/Evidence 迁移到 `agents/roles/`，搜索解析与 trace 移入 `workflows/search/`，避免把 Parser/Workflow 命名为 Agent。
+- 后续清理已移除旧的扁平服务、领域、pipeline 与 workflow shim 路径，统一使用新架构 import。
+- CLI 已拆分为 `cli/main.py`、`cli/commands/` 与 `cli/formatters/`，并保持 `argupaper.cli:main` 入口可用。
+- `docs/SMOKE.md` 已新增 v0.3 架构边界重构验收表单。
+
+## Convert 目录批量转换
+
+完成时间：2026-05-24
+
+本次基于 OpenSpec change `batch-convert-folder` 为 `argupaper convert` 增加目录批量转换能力：
+
+- 新增 `argupaper convert --folder <dir>` / `-d <dir>`，按目录直属 PDF 顺序执行现有 PDF 转 Markdown 缓存流程。
+- 保留 `--force/-f` 原有语义；目录模式会跳过非 PDF、子目录或不可读条目，并继续处理后续文件。
+- 每次目录转换会输出处理进度与汇总，并在本地数据目录下写入可追踪 JSONL 执行日志。
+- README 与 `docs/SMOKE.md` 已同步批量转换命令和手工验收表单。
+
+## Agent Prompt Markdown 集中化
+
+完成时间：2026-05-21
+
+本次将 agent 提示词统一收敛到 `src/argupaper/prompts/` 下的 Markdown 文件，并由脚本运行时读取：
+
+- 新增 `argupaper.prompts.load_prompt()`，统一按 UTF-8 读取 prompt 模板。
+- `SupportAgent` 与 `SkepticAgent` 的 system/user prompt 已从 agent 声明脚本迁移到 `.md` 文件。
+- `SearchRequestParser` 的解析 prompt 从 `.txt` 迁移为 `.md`，相对日期提示也改为 Markdown 模板。
+- `docs/SMOKE.md` 已补充不依赖外部服务的 prompt 加载验收表单。
+
+## LangChain Analyze Agent 编排
+
+完成时间：2026-05-19
+
+本次基于 OpenSpec change `langchain-analyze-agent-orchestration` 将 analyze 主链路中的 Support/Skeptic debate 重构为 LangChain `ChatPromptTemplate` + LCEL Runnable 编排：
+
+- 新增复用现有 `LLMRouter` 的 LangChain adapter，不新增 `langchain-openai`、OpenAI SDK 或新的环境变量。
+- `SupportAgent` 与 `SkepticAgent` 保持 `think(context) -> str` 接口不变，优先走 LangChain 角色链，LLM 不可用时降级到确定性规则输出。
+- `DebateChain` 保持原有轮次、顺序、early stop 和 `DebateState`/`AgentMessage` 输出结构，并把角色降级原因写入 warnings。
+- `AnalyzeWorkflow` 会合并 debate warnings，CLI/Web analyze 可以继续暴露降级原因；Search workflow 不受影响。
+- README 与 `docs/SMOKE.md` 已同步 LangChain debate 与 fallback 手工验收表单。
+
+## Analyze 输入与 PDF 转换解耦
+
+完成时间：2026-05-18
+
+本次基于 OpenSpec change `separate-pdf-convert-and-name-analyze` 将 PDF 转 Markdown 从 analyze 主链路中拆出：
+
+- 新增 `argupaper convert <pdf>`，专门负责本地 PDF 转 Markdown 并写入 `data/cache`。
+- `argupaper analyze <paper-name>` 可按原始 PDF 文件名、stem 或 cache key 读取已转换 Markdown，不再默认触发 MinerU。
+- 旧的 `argupaper analyze ./paper.pdf` 仍保留兼容，但会输出迁移 warning，推荐改用 `convert -> analyze <paper-name>`。
+- README 与 `docs/SMOKE.md` 已同步新命令和手工验收表单。
+
+## Claim-Evidence 无关矛盾过滤修复
+
+完成时间：2026-05-05
+
+本次修复了 claim checker 会用无关 evidence 误判 contradiction 的问题：
+
+- contradiction 判断改为只检查当前 claim 选中的 best evidence。
+- 未匹配到 evidence 的 claim 不再因为其他无关 evidence 中的负向词被标成矛盾。
+- `docs/SMOKE.md` 已补充无关负向 evidence 不应压掉正向匹配的验收表单。
+
+## 本地 React 工作台接入
+
+完成时间：2026-05-03
+
+本次基于 OpenSpec change `add-react-local-workbench` 为当前 CLI 能力新增本地 Web 可视化入口：
+
+- 新增 `argupaper.web` FastAPI 后端，提供 `/api/search`、`/api/analyze`、`/api/jobs/{job_id}`、`/api/papers`、`/api/papers/{paper_id}` 与 `/api/config/status`。
+- `analyze` Web 入口采用后台任务模型，支持 job 状态、阶段进度、warning、失败原因和最终 Markdown 报告查询。
+- 新增 `frontend/` React + Vite + TypeScript 工作台，包含 Search、Analyze、Library 三个视图。
+- Search 与 Library 复用现有 workflow / PaperStore，不解析 CLI Rich 输出；CLI 命令保持兼容。
+- README 与 `docs/SMOKE.md` 已同步本地后端、前端和三条主工作流的手工验收步骤。
 
 ## Analyze 输出路径收口
 
@@ -291,7 +482,7 @@ CLI 已具备 MVP 可用性：
 - 对“权威期刊”等模糊条件增加 CLI 二次确认，避免系统暗自猜测
 - 复用现有 Semantic Scholar / arXiv 检索链路做候选召回
 - 新增过滤层，对年份、发表源、数量等条件做结果筛选
-- 新增搜索 Agent trace 落盘，保存原始请求、解析结果、原始候选、过滤结果和最终结果
+- 新增搜索 workflow trace 落盘，保存原始请求、解析结果、原始候选、过滤结果和最终结果
 - 新增通用 OpenAI 兼容 LLM provider 配置，为后续其他 Agent 复用做准备
 - 新增 Prompt 独立目录，避免把 Agent Prompt 硬编码在 Python 中
 

@@ -51,10 +51,9 @@ class ModelConfig(BaseModel):
     providers: dict[str, LLMProviderConfig] = Field(default_factory=dict)
 
 
-class SearchAgentConfig(BaseModel):
-    """Search-agent specific configuration."""
+class SearchWorkflowConfig(BaseModel):
+    """Search workflow configuration."""
 
-    trace_path: str = "./data/agent_runs/search"
     max_candidates: int = 50
 
 
@@ -64,14 +63,25 @@ class DebateConfig(BaseModel):
     max_rounds: int = 3
 
 
+class LogConfig(BaseModel):
+    """Runtime log directory configuration."""
+
+    root_path: str = "./data/logs"
+    search_path: str = "./data/logs/search"
+    convert_path: str = "./data/logs/convert"
+    web_path: str = "./data/logs/web"
+    chat_path: str = "./data/logs/chat"
+
+
 class Config(BaseModel):
     """Main configuration for ArguPaper."""
 
     pdf: PDFConfig
     retrieval: RetrievalConfig = RetrievalConfig()
     model: ModelConfig = ModelConfig()
-    search_agent: SearchAgentConfig = SearchAgentConfig()
+    search_workflow: SearchWorkflowConfig = SearchWorkflowConfig()
     debate: DebateConfig = DebateConfig()
+    log: LogConfig = LogConfig()
     data_path: str = "./data"
     paper_storage_path: str = "./data/papers"
     analyze_enable_retrieval_loop: bool = True
@@ -124,12 +134,20 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
     pdf_cache_dir = os.getenv("CACHE_PATH", "./data/cache")
     data_path = os.getenv("DATA_PATH", "./data")
     paper_storage_path = os.getenv("PAPER_STORAGE_PATH", str(Path(data_path) / "papers"))
-    search_agent_trace_path = os.getenv("SEARCH_AGENT_TRACE_PATH", "./data/agent_runs/search")
+    log_root_path = os.getenv("LOG_PATH", str(Path(data_path) / "logs"))
+    search_log_path = str(Path(log_root_path) / "search")
+    convert_log_path = str(Path(log_root_path) / "convert")
+    web_log_path = str(Path(log_root_path) / "web")
+    chat_log_path = os.getenv("CHAT_LOG_PATH", str(Path(log_root_path) / "chat"))
 
     Path(pdf_cache_dir).mkdir(parents=True, exist_ok=True)
     Path(data_path).mkdir(parents=True, exist_ok=True)
     Path(paper_storage_path).mkdir(parents=True, exist_ok=True)
-    Path(search_agent_trace_path).mkdir(parents=True, exist_ok=True)
+    Path(log_root_path).mkdir(parents=True, exist_ok=True)
+    Path(search_log_path).mkdir(parents=True, exist_ok=True)
+    Path(convert_log_path).mkdir(parents=True, exist_ok=True)
+    Path(web_log_path).mkdir(parents=True, exist_ok=True)
+    Path(chat_log_path).mkdir(parents=True, exist_ok=True)
 
     return Config(
         pdf=PDFConfig(
@@ -152,12 +170,18 @@ def load_config(require_pdf_api_key: bool = True) -> Config:
             weak_provider=os.getenv("LLM_WEAK_PROVIDER", "weak"),
             providers=_load_llm_providers(),
         ),
-        search_agent=SearchAgentConfig(
-            trace_path=search_agent_trace_path,
-            max_candidates=int(os.getenv("SEARCH_AGENT_MAX_CANDIDATES", "50")),
+        search_workflow=SearchWorkflowConfig(
+            max_candidates=int(os.getenv("SEARCH_WORKFLOW_MAX_CANDIDATES", "50")),
         ),
         debate=DebateConfig(
             max_rounds=int(os.getenv("DEBATE_MAX_ROUNDS", "3")),
+        ),
+        log=LogConfig(
+            root_path=log_root_path,
+            search_path=search_log_path,
+            convert_path=convert_log_path,
+            web_path=web_log_path,
+            chat_path=chat_log_path,
         ),
         data_path=data_path,
         paper_storage_path=paper_storage_path,

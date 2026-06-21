@@ -1,459 +1,348 @@
 
-# **ArguPaper — 产品需求文档（增强版 PRD v0.2）**
+# ArguPaper v0.3 PRD：面向个人科研阅读的多 Agent 论文记忆与关联分析系统
 
----
+## 1. 产品定位
 
-## 一、产品定位
+ArguPaper v0.3 是一个面向个人科研学习与论文阅读的本地化 Research Agent。系统不再以“自动判断论文是否有缺陷”为核心目标，而是帮助用户围绕本地论文库完成论文理解、论文联想、相关工作组织、多轮问答和多 Agent 研究讨论。
 
-**ArguPaper** 是一个基于多智能体（Multi-Agent）的科研认知系统，提供从**论文检索 → 理解 → 证据分析 → 对抗性批判 → 共识生成**的一站式服务，并通过动态检索与知识结构化实现接近真实科研过程的分析能力。
+一句话定位：
 
----
+> ArguPaper 是一个具有本地论文记忆、多轮对话、工具调用和多 Agent 研究讨论能力的个人科研阅读助手。
 
-## 二、核心功能模块（按流程划分）
+## 2. 目标用户
 
----
+主要用户为本科生、研究生、科研入门者和需要长期阅读论文的个人开发者。
 
-## 1. 论文检索模块（Paper Retrieval）
+典型痛点：
 
-### 功能描述（升级）
+* 读完论文后难以和之前读过的论文建立联系
+* 不清楚当前论文属于哪条研究路线
+* 难以快速比较两篇论文的方法、任务、实验和贡献
+* 缺少一个可以围绕本地论文库持续追问的科研对话系统
+* 希望保留一定的多 Agent 前沿性，但不希望系统过度宣称自动审稿能力
 
-系统根据用户需求自动生成多组语义关键词，并通过多轮检索 + 分析驱动检索（Search-in-the-loop）机制，实现**检索与推理耦合**。
+## 3. 设计原则
 
-> 现有系统普遍存在“分析脱离外部证据”的问题 ([arXiv][1])
-> 本系统引入动态检索以弥补该缺陷
+### 3.1 从“论文裁判”转向“科研阅读助手”
 
----
+系统不直接断言论文质量好坏，而是输出“可能需要人工检查的问题”“与本地论文的相似点/差异点”“推荐继续阅读的方向”。
 
-### 子功能设计（增强）
+### 3.2 从“一次性命令”升级为“多轮 Research Agent”
 
-### 1️⃣ 关键词生成（Query Expansion）
+保留 CLI 命令，同时新增对话式入口。Agent 需要维护当前论文、当前研究主题、最近检索结果、用户追问历史和本地论文库上下文。
 
-* 语义扩展（同义词 / 上下位 / 方法 / 数据集）
-* 研究问题拆解驱动关键词生成
+### 3.3 多 Agent 辩论保留，但用途调整
 
----
+原有 Debate 不再用于强行判断论文缺陷，而是用于多视角研究讨论，例如：
 
-### 2️⃣ 多轮搜索机制（Iterative Search）
+* 当前论文的贡献如何理解
+* 它和本地论文库中哪些论文相关
+* 它可能属于哪条研究路线
+* 哪些问题需要继续查证或人工判断
 
-* 多策略检索（exploration / exploitation）
-* 支持动态调整搜索策略
+## 4. 核心功能
 
----
+### 4.1 Paper Memory：本地论文记忆库
 
-### 3️⃣ 🔄 分析驱动检索（Search-in-the-loop）【新增核心】
+系统保存用户已转换和已分析的论文，并结构化存储以下信息：
 
-在后续分析过程中，Agent可触发新的检索行为：
+* 标题
+* 摘要
+* 关键词
+* 研究问题
+* 方法
+* 数据集
+* baseline
+* claim
+* evidence
+* 本地 Markdown 内容
+* 分析报告
+* 向量索引信息
 
-* 自动补充：
+目标是支持跨论文检索、跨论文比较和多轮对话中的记忆调用。
 
-  * baseline论文
-  * 对比方法
-  * 冲突研究
-* 支持“验证式检索”（verification search）
+### 4.2 Research Chat：多轮科研对话入口
 
-👉 对标 ScholarPeer 的 active verification 思路 ([arXiv][2])
+新增 `argupaper chat` 和 Web Chat 页面。
 
----
-
-### 4️⃣ 论文质量排序（Quality Ranking）
-
-* 基于：
-
-  * 期刊等级（CCF）
-  * citation
-  * 方法新颖性（可扩展）
-
----
-
-### 5️⃣ 渐进式筛选机制（Progressive Filtering）
-
-* 标题过滤 → 摘要过滤 → 初步结构理解
-* 输出候选论文列表
-
----
-
-## 2. 论文简读模块（Paper Skimming）
-
-#### 功能描述
-
-对论文进行快速理解，帮助用户在短时间内掌握核心内容，并支持基础问答。
-
-#### 子功能设计
-
-* **结构化摘要生成**
-
-  * 研究问题（Problem）
-  * 方法（Method）
-  * 数据集与实验（Experiment）
-  * 结论（Conclusion）
-
-* **轻量问答系统**
-
-  * 回答用户对论文的基础问题
-  * 限制为“非深度推理”级别问题
-
----
-
-## 3. 论文精讲模块（Deep Analysis & Critique）
-
-#### 功能描述（核心差异点）
-
-基于多智能体协作，对论文进行**深入解析 + 批判性分析**，形成具有研究价值的输出。
-
-
-## Agent分层设计（增强版）
-
----
-
-### （1）分析层（Analysis Layer）
-
-* 提供系统性知识总结：
-
-  * 方法原理拆解
-  * 技术路线分析
-  * 实验设计解析
-* 输出结构化分析报告
-
----
-
-### （2）证据层（Evidence Layer）【新增】
-
-👉 用于解决“表层批判”问题
-
-> 当前系统常停留在浅层总结，难以评估方法可靠性 ([arXiv][2])
-
----
-
-#### 核心能力：
-
-* 实验信息抽取：
-
-  * 数据集
-  * 样本量
-  * 指标
-* 方法条件分析：
-
-  * 适用范围
-  * 假设条件
-* 结果可信度分析：
-
-  * 是否有统计支撑
-  * 是否存在过拟合风险
-
----
-
-### （3）批判层（Critique Layer）【强化】
-
-#### 新增能力：
-
-* **证据一致性校验**
-
-  * claim ↔ experiment 对齐检查
-* **方法有效性分析**
-
-  * 是否合理 / 是否过度简化
-* **实验充分性分析**
-
-  * 是否缺 baseline / ablation
-
----
-
-### （4）⚔️ 对抗层（Debate Layer）【核心新增】
-
-👉 解决“单路径推理”问题
-
----
-
-#### Agent角色：
-
-* **Support Agent（支持）**
-
-  * 为论文辩护
-* **Skeptic Agent（质疑）**
-
-  * 挖掘漏洞
-* **Comparator Agent**
-
-  * 引入对比论文
-* **Evidence Agent**
-
-  * 提供证据支持
-
----
-
-#### 机制：
-
-```text
-Round 1：提出观点
-Round 2：互相反驳
-Round 3：证据补充（触发检索）
-Round N：收敛或继续争论
-```
-
-👉 实践表明，多Agent争论显著提升分析质量 ([Reddit][3])
-
----
-
-### （5）裁决层（Judge Layer）【新增】
-
-#### 功能：
-
-* 汇总多Agent结论
-* 输出：
-
-```text
-共识（Consensus）
-分歧（Disagreement）
-支持证据
-```
-
----
-
-## 🔄 迭代机制（升级）
-
-```text
-Analysis
-  ↓
-Evidence Extraction
-  ↓
-Debate（多轮）
-  ↓
-Search-in-loop（补充证据）
-  ↓
-Judge（裁决）
-```
-
----
-
-## 三、系统级能力设计（SPECIAL）
-
----
-
-### 0. CLI用户入口【P0新增】
-
-提供命令行界面作为主要交互方式：
+Agent 支持用户用自然语言发起任务，例如：
 
 ```bash
-# 分析单篇论文
-argupaper analyze ./paper.pdf --output report.md --rounds 3
-
-# 搜索论文
-argupaper search "machine learning theory" --limit 10 --source semantic_scholar
-
-# 直接分析URL
-argupaper analyze "https://arxiv.org/pdf/2301.12345.pdf" --output report.md
+argupaper chat
 ```
 
-#### 设计原则
-
-* **简单优先**：一个命令完成端到端分析
-* **配置友好**：通过 `.env` 或命令行参数配置API keys
-* **渐进输出**：实时显示分析进度，结果分区展示
-* **错误可查**：详细的错误信息和日志
-
----
-
-### 1. 全局论文记忆库（升级）
-
-#### 设计特点
-
-区别于传统对话记忆，该模块为**结构化长期知识存储系统**
-
-#### 分层存储机制（渐进式披露）
-
-* Level 1：论文标题
-* Level 2：摘要（Abstract）
-* Level 3：全文（Markdown格式）
-
-#### 功能能力
-
-* 支持跨任务复用
-* 支持语义检索
-* 支持知识关联（为图谱提供基础）
-
-## 🔥 新增：结构化知识层
-
-不仅存储文本，还存储：
-
-* Claim（结论）
-* Method（方法）
-* Evidence（证据）
-
----
-
-### 支持能力：
-
-* 跨论文推理
-* 冲突检测
-* 证据复用
-
----
-
-### 2. PDF → Markdown 转换（保持）
-
-* 使用专用API将论文PDF转为Markdown
-* PDF本地存储（用于溯源）
-* Markdown用于Agent解析与上下文输入
-
----
-
-### 3. 异步分析机制（保持）
-
-#### 设计目标
-
-提升用户体验与系统吞吐效率
-
-#### 实现方式
-
-* 优先返回：
-  * 分析层结果（快速）
-* 延迟返回：
-  * 批判层结果（较慢）
-* UI层分区展示结果
-
----
-
-### 4. 原文优先机制（保持）
-
-* 在Agent上下文中提升论文原文权重
-* 降低幻觉风险
-* 强化基于证据的分析
-
----
-
-## 🔄 5. 动态检索引擎（新增）
-
-与所有Agent耦合：
-
-* Analysis阶段 → 检索baseline
-* Debate阶段 → 检索反例
-* Critique阶段 → 检索证据
-
----
-
-## 四、输出设计（升级）
-
----
-
-## 🚨 从“文本输出” → “科研决策输出”
-
----
-
-### 输出结构：
+示例问题：
 
 ```text
-1. Research Overview
-2. Method Comparison
-3. Evidence Table
-4. Debate Summary（新增）
-5. Contradictions
-6. Weakness Analysis
-7. Consensus vs Disagreement（新增）
-8. Confidence Score（新增）
+这篇论文和我之前读过的 speculative decoding 论文有什么关系？
+帮我找本地论文库中和这篇论文最像的 5 篇论文。
+这篇论文可以放进哪条研究路线？
+把这几篇论文组织成一个课程汇报思路。
 ```
 
----
+Chat Agent 需要具备：
 
-### 🧠 置信度建模（新增）
+* 当前论文状态管理
+* 用户意图识别
+* 工具调用
+* 本地论文库检索
+* 多轮上下文记忆
+* 回答中的证据引用
+* 必要时向用户追问
+
+### 4.3 Relate：本地论文联想
+
+新增命令：
+
+```bash
+argupaper relate <paper-name>
+```
+
+功能：
+
+* 根据当前论文的标题、摘要、方法、关键词、claim，从本地论文库中检索相关论文
+* 输出相关论文 Top-K
+* 解释相关原因
+* 判断它们之间是方法相似、任务相似、应用相似、引用相关，还是研究路线相关
+
+输出结构：
 
 ```text
-结论A：支持度 78%
-结论B：支持度 42%
-冲突强度：高
+1. 当前论文核心主题
+2. 本地相关论文 Top-K
+3. 每篇论文的关联原因
+4. 共同研究问题
+5. 方法差异
+6. 推荐下一篇阅读论文
 ```
 
-👉 多Agent评估优于单Agent评估 ([arXiv][4])
+### 4.4 Compare：论文比较
 
----
+新增命令：
 
-## 五、扩展功能（BONUS）
+```bash
+argupaper compare <paper-a> <paper-b>
+```
 
-### 1. 知识图谱（Knowledge Graph）
+功能：
 
-* 构建论文之间的引用与语义关联
-* 可视化用户研究路径
-* 支持论文推荐与关联发现
+* 比较两篇论文的任务、方法、实验、数据集、baseline、贡献点
+* 输出相同点、不同点和适合写入 related work 的总结
+* 避免直接判断优劣，除非有明确证据支持
 
----
+输出结构：
 
-### 2. 引用论文跟踪
+```text
+1. 研究问题对比
+2. 方法对比
+3. 实验设置对比
+4. 数据集与指标对比
+5. 贡献差异
+6. 适合写入综述的比较段落
+```
 
-* 自动提取论文中的关键引用
-* 存入记忆库“临时分区”
-* 支持快速扩展阅读
+### 4.5 Research Discussion：多 Agent 研究讨论
 
----
+保留原有多 Agent Debate，但改造成研究讨论功能。
 
-### 3. 无关请求过滤（成本控制）
+Agent 角色：
 
-* 使用轻量模型进行意图分类
-* 对非学术请求拒绝调用高成本模型
+#### Supervisor Agent
 
----
+负责理解用户意图、选择工具、组织多 Agent 协作流程。
 
-### 4. 多轮自优化机制
+#### Paper Reader Agent
 
-* 分析层与批判层循环优化结果
-* 提升最终输出质量
+负责解释当前论文的研究问题、方法、实验和结论。
 
----
+#### Memory Retriever Agent
 
-## 六、功能优先级排序（更新）
+负责从本地论文库中检索相关论文。
 
----
+#### Comparator Agent
 
-### 🔴 P0（MVP必须）
+负责比较当前论文与本地相关论文的相似点和差异点。
 
-* **CLI入口** ← 新增
-  * `argupaper analyze <paper.pdf>` - 分析单篇论文
-  * `argupaper search <query>` - 搜索论文
-* 检索模块 + Search-in-loop
-* 简读模块
-* Analysis + Evidence Layer
-* 简单Debate（2 Agent）
-* PDF解析
-* 基础记忆库
+#### Skeptic Agent
 
----
+负责提出需要谨慎理解或人工检查的问题，例如是否缺少 ablation、baseline 是否需要进一步确认。
 
-### 🟡 P1
+#### Evidence Agent
 
-* 完整Debate系统（多Agent）
-* Judge层
-* 置信度系统
-* 动态检索引擎
+负责检查回答是否能追溯到论文原文、本地论文库或检索结果。
 
----
+#### Judge Agent
 
-### 🟢 P2
+负责整合多 Agent 观点，输出共识、分歧和建议下一步。
 
-* 知识图谱推理
-* 多轮优化
-* 引用扩展
+### 4.6 Checkpoints：人工检查点提示
 
----
+系统不直接给出“论文有缺陷”的结论，而是输出检查点：
 
-## 七、关键差异总结（增强版）
+```text
+系统未在当前解析内容中发现明显的 ablation study，建议人工检查实验章节。
+系统发现当前论文与本地论文 A/B 在方法设计上相似，建议进一步比较二者贡献差异。
+系统未发现明显的 baseline 对比信息，建议确认实验表格是否完整解析。
+```
 
----
+该功能作为辅助阅读提示，不作为自动审稿判断。
 
-### 与现有系统的本质差异：
+## 5. 非目标
 
-| 维度   | 传统系统 | ArguPaper              |
-| ---- | ---- | ---------------------- |
-| 批判能力 | 表层总结 | **证据驱动批判**             |
-| 推理方式 | 单路径  | **多Agent对抗推理**         |
-| 检索机制 | 静态   | **Search-in-the-loop** |
-| 输出   | 文本   | **决策+置信度**             |
+v0.3 暂不追求：
 
----
+* 自动判断论文是否一定存在缺陷
+* 自动预测论文是否应该被接收
+* 构建复杂知识图谱可视化
+* 完整替代人工审稿
+* 大规模训练专用模型
+* 复杂云端多用户系统
 
-### 一句话总结：
+## 6. CLI 设计
 
-👉 不是“论文总结工具”
-👉 而是：**模拟科研团队思考过程的认知系统**
+保留已有命令：
 
-[1]: https://arxiv.org/abs/2603.14629?utm_source=chatgpt.com "ResearchPilot: A Local-First Multi-Agent System for Literature Synthesis and Related Work Drafting"
-[2]: https://arxiv.org/abs/2601.22638?utm_source=chatgpt.com "ScholarPeer: A Context-Aware Multi-Agent Framework for Automated Peer Review"
-[3]: https://www.reddit.com/r/OpenAI/comments/1scf91j/i_used_a_structured_multiagent_workflow_to/?utm_source=chatgpt.com "I used a structured multi-agent workflow to generate a 50+ page research critique"
-[4]: https://arxiv.org/abs/2410.15287?utm_source=chatgpt.com "Training Language Models to Critique With Multi-agent Feedback"
+```bash
+argupaper convert <paper.pdf>
+argupaper analyze <paper-name>
+argupaper search <query>
+argupaper papers
+```
+
+新增命令：
+
+```bash
+argupaper chat
+argupaper relate <paper-name>
+argupaper compare <paper-a> <paper-b>
+argupaper discuss <paper-name>
+```
+
+命令含义：
+
+* `chat`：进入多轮科研对话
+* `relate`：从本地论文库中寻找相关论文
+* `compare`：比较两篇论文
+* `discuss`：触发多 Agent 研究讨论
+
+## 7. Web 工作台设计
+
+Web 工作台保留 Search、Analyze、Library 页面，新增：
+
+### Chat 页面
+
+用于多轮科研对话。
+
+### Related 页面
+
+展示当前论文与本地论文库的关联结果。
+
+### Compare 页面
+
+展示两篇论文的结构化对比。
+
+### Discussion 页面
+
+展示多 Agent 讨论过程，包括不同 Agent 的观点、证据和最终 Judge 总结。
+
+## 8. 技术架构
+
+```text
+User CLI / Web Chat
+        ↓
+Research Supervisor Agent
+        ↓
+Intent Router
+        ↓
+Tool Planner
+        ↓
+Tool Executor
+        ↓
+PaperStore / Vector Search / Analyze / Relate / Compare
+        ↓
+Multi-Agent Discussion
+        ↓
+Answer Synthesizer
+        ↓
+Memory Writer
+```
+
+## 9. MVP 优先级
+
+### P0：必须完成
+
+* 本地论文库 embedding 检索
+* `argupaper relate <paper-name>`
+* `argupaper compare <paper-a> <paper-b>`
+* 基础 `argupaper chat`
+* 会话状态管理：current paper、last analysis、last retrieved papers
+* 回答中区分“原文证据”“本地库推断”“需要人工确认”
+
+### P1：建议完成
+
+* Research Discussion 多 Agent 编排
+* Supervisor Agent 调度多个专门 Agent
+* Related Work Map 输出
+* Web Chat 页面
+* Web Related 页面
+* 本地论文推荐下一读
+
+### P2：后续扩展
+
+* 研究路线图
+* 引用关系图谱
+* 基于公开数据集的自动评估
+* 更强的 Evidence QA
+* 多篇论文综述草稿生成
+
+## 10. 输出格式
+
+### Relate 输出
+
+```text
+1. 当前论文核心摘要
+2. 本地相关论文 Top-K
+3. 关联类型
+4. 相似点
+5. 差异点
+6. 推荐阅读顺序
+```
+
+### Compare 输出
+
+```text
+1. 任务对比
+2. 方法对比
+3. 实验对比
+4. 贡献对比
+5. 适合写入 related work 的总结
+```
+
+### Discussion 输出
+
+```text
+1. Paper Reader 观点
+2. Comparator 观点
+3. Skeptic 检查点
+4. Evidence 支撑情况
+5. Judge 共识
+6. 下一步建议
+```
+
+## 11. 验收标准
+
+v0.3 MVP 完成后，系统应满足：
+
+* 用户可以把多篇论文加入本地库
+* 用户可以选择一篇论文并检索本地相关论文
+* 用户可以比较两篇本地论文
+* 用户可以围绕当前论文进行多轮对话
+* Agent 能根据上下文自动调用 analyze、relate、compare、papers 等工具
+* 多 Agent 讨论能输出不同视角，而不是单一总结
+* 系统不会把“未找到证据”误写成“论文一定有缺陷”
+* 所有推断性结论都应标注为“建议人工检查”或“需要进一步确认”
+
+## 12. 一句话总结
+
+ArguPaper v0.3 不再是一个试图自动审稿的论文批判系统，而是一个面向个人科研阅读的多 Agent 论文记忆与关联分析系统。它通过本地论文库、多轮对话、工具调用和多 Agent 研究讨论，帮助用户把读过的论文连接成可理解、可追问、可复用的研究脉络。
+

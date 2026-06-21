@@ -1,0 +1,494 @@
+﻿"""Workflow for CLI paper analysis."""
+
+import asyncio
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Optional
+
+from argupaper.pipelines.analysis_pipeline import AnalysisChain
+from argupaper.pipelines.debate_pipeline import DebateChain
+from argupaper.pipelines.evidence_pipeline import EvidenceChain
+from argupaper.agents.models import AgentMessage, DebateState
+from argupaper.config import Config
+from argupaper.domain.paper.structured import StructuredExtractor
+from argupaper.domain.paper.title import PaperTitleResolver
+from argupaper.domain.verdict.consensus import ConsensusDetector
+from argupaper.services.llm import LLMRouter
+from argupaper.memory.paper_store import PaperStore
+from argupaper.services.reporting.report import ReportGenerator
+from argupaper.services.pdf import MarkdownCache, MinerUClient, PDFPipeline
+from argupaper.workflows.models import AnalyzeOptions, AnalyzeWorkflowResult, SearchOptions
+from argupaper.workflows.errors import ConfigurationError, InputValidationError
+from argupaper.workflows.search.workflow import SearchWorkflow
+
+ProgressCallback = Optional[Callable[[str], None]]
+PipelineFactory = Optional[Callable[[], PDFPipeline]]
+
+
+@dataclass(frozen=True)
+class MarkdownInput:
+    """Resolved Markdown input for the analyze workflow."""
+
+    markdown: str
+    paper_id: str
+    source_label: str
+    from_cache: bool
+    warnings: list[str] = field(default_factory=list)
+
+
+class AnalyzeWorkflow:
+    """Orchestrates PDF processing and report generation for the CLI."""
+
+    def __init__(
+        self,
+        config: Config,
+        extractor: Optional[StructuredExtractor] = None,
+        analysis_chain: Optional[AnalysisChain] = None,
+        evidence_chain: Optional[EvidenceChain] = None,
+        debate_chain: Optional[DebateChain] = None,
+        consensus_detector: Optional[ConsensusDetector] = None,
+        report_generator: Optional[ReportGenerator] = None,
+        paper_store: Optional[PaperStore] = None,
+        search_workflow: Optional[SearchWorkflow] = None,
+        pipeline_factory: PipelineFactory = None,
+        llm_router: Optional[LLMRouter] = None,
+        title_resolver: Optional[PaperTitleResolver] = None,
+    ):
+        self.config = config
+        self.extractor = extractor or StructuredExtractor()
+        self.analysis_chain = analysis_chain or AnalysisChain()
+        self.evidence_chain = evidence_chain or EvidenceChain()
+        self.llm_router = llm_router or (None if debate_chain is not None else LLMRouter(config.model))
+        self._owns_llm_router = llm_router is None and self.llm_router is not None
+        self.debate_chain = debate_chain or DebateChain(
+            max_rounds=config.debate.max_rounds,
+            llm_router=self.llm_router,
+        )
+        self.consensus_detector = consensus_detector or ConsensusDetector()
+        self.report_generator = report_generator or ReportGenerator()
+        self.paper_store = paper_store or PaperStore(storage_path=config.paper_storage_path)
+        self.search_workflow = search_workflow or SearchWorkflow(config)
+        self.pipeline_factory = pipeline_factory
+        self.title_resolver = title_resolver or PaperTitleResolver()
+
+    async def run(
+        self,
+        options: AnalyzeOptions,
+        progress_callback: ProgressCallback = None,
+    ) -> AnalyzeWorkflowResult:
+        """Run the analysis workflow."""
+
+        try:
+            self.debate_chain.max_rounds = options.rounds
+            if progress_callback:
+                progress_callback("Loading Markdown input...")
+            markdown_input = await self._load_markdown_input(options, progress_callback)
+            return await self._run_analysis_on_markdown(markdown_input, options, progress_callback)
+        finally:
+            if self._owns_llm_router and self.llm_router is not None:
+                await self.llm_router.close()
+
+    async def _load_markdown_input(
+        self,
+        options: AnalyzeOptions,
+        progress_callback: ProgressCallback = None,
+    ) -> MarkdownInput:
+        """Resolve analyze input from explicit Markdown, cache name, or legacy PDF."""
+
+        if options.markdown is not None:
+            cache_key = options.cache_key or options.paper_name or "inline-markdown"
+            return MarkdownInput(
+                markdown=options.markdown,
+                paper_id=str(cache_key),
+                source_label=options.source_label or str(cache_key),
+                from_cache=True,
+            )
+
+        if options.paper_name:
+            cache = MarkdownCache(cache_dir=self.config.pdf.cache_dir)
+            matches = cache.find_records(options.paper_name)
+            if not matches:
+                raise InputValidationError(
+                    "No converted Markdown cache entry matched "
+                    f"'{options.paper_name}'. Run `argupaper convert <pdf>` first."
+                )
+            if len(matches) > 1:
+                candidates = ", ".join(
+                    f"{record.original_filename or 'unknown'} ({record.cache_key})"
+                    for record in matches[:8]
+                )
+                raise InputValidationError(
+                    "Multiple converted Markdown cache entries matched "
+                    f"'{options.paper_name}'. Use a more specific filename or cache key. "
+                    f"Candidates: {candidates}"
+                )
+
+            record = matches[0]
+            markdown = cache.get_record_content(record)
+            if markdown is None:
+                raise InputValidationError(
+                    f"Matched cache entry '{record.cache_key}' is unreadable. "
+                    "Run `argupaper convert <pdf> --force` to regenerate it."
+                )
+            return MarkdownInput(
+                markdown=markdown,
+                paper_id=record.cache_key,
+                source_label=record.original_filename or record.cache_key,
+                from_cache=True,
+            )
+
+        if options.paper_path is None:
+            raise InputValidationError(
+                "Analyze requires a converted paper name or a legacy local PDF path."
+            )
+
+        paper_path = Path(options.paper_path)
+        if not paper_path.exists():
+            raise InputValidationError(f"PDF file not found: {paper_path}")
+        if paper_path.suffix.lower() != ".pdf":
+            raise InputValidationError("Input must be a converted paper name or a .pdf file.")
+
+        if progress_callback:
+            progress_callback("Converting PDF to Markdown...")
+        pipeline = self._build_pipeline()
+        try:
+            result = await pipeline.process(paper_path, force_reconvert=options.force_reconvert)
+        finally:
+            await pipeline.close()
+        return MarkdownInput(
+            markdown=result.markdown or "",
+            paper_id=result.cache_key,
+            source_label=str(paper_path),
+            from_cache=result.from_cache,
+            warnings=[
+                "Legacy PDF analyze input is supported for compatibility. "
+                f"Recommended workflow: `argupaper convert \"{paper_path}\"` then "
+                f"`argupaper debate \"{paper_path.stem}\"`."
+            ],
+        )
+
+    async def _run_analysis_on_markdown(
+        self,
+        markdown_input: MarkdownInput,
+        options: AnalyzeOptions,
+        progress_callback: ProgressCallback = None,
+    ) -> AnalyzeWorkflowResult:
+        """Run analysis stages after Markdown input has been resolved."""
+
+        markdown = markdown_input.markdown
+        paper_id = markdown_input.paper_id
+        source_label = markdown_input.source_label
+        warnings = list(markdown_input.warnings)
+        if not markdown.strip():
+            warnings.append(
+                "PDF conversion returned empty Markdown; downstream analysis used fallback defaults."
+            )
+
+        if progress_callback:
+            progress_callback("Extracting structure...")
+        structured = await self.extractor.extract_abstract(markdown)
+        method_info = await self.extractor.extract_method(markdown)
+        experiments = await self.extractor.extract_experiments(markdown)
+        missing_structured_fields = [
+            field
+            for field in ("problem", "method", "experiment", "conclusion")
+            if not str(structured.get(field, "")).strip()
+        ]
+        if missing_structured_fields:
+            warnings.append(
+                "Structured extraction missing fields: "
+                + ", ".join(missing_structured_fields)
+                + "."
+            )
+        if not str(method_info.get("details", "")).strip():
+            warnings.append("Method extraction returned no method details.")
+
+        if progress_callback:
+            progress_callback("Running analysis...")
+        analysis = await self.analysis_chain.run(markdown)
+        title_result = await self.title_resolver.resolve(markdown, source_label, self.llm_router)
+        warnings.extend(warning for warning in title_result.warnings if warning not in warnings)
+        paper_title = title_result.title
+        analysis = dict(analysis)
+        analysis["title"] = paper_title
+
+        if progress_callback:
+            progress_callback("Running evidence checks...")
+        evidence = await self.evidence_chain.run(markdown)
+
+        supplementary_search_used = False
+        supplementary_results: list[dict] = []
+        if (
+            self.config.analyze_enable_retrieval_loop
+            and evidence.get("needs_supplementary_search")
+            and markdown.strip()
+        ):
+            if progress_callback:
+                progress_callback("Running supplementary retrieval...")
+            try:
+                query = paper_title or structured.get("problem") or Path(source_label).stem
+                search_result = await self.search_workflow.run(
+                    SearchOptions(query=query, limit=3, source="semantic_scholar", verbose=False)
+                )
+                supplementary_results = [item.model_dump() for item in search_result.results]
+                supplementary_search_used = len(supplementary_results) > 0
+                warnings.extend(search_result.warnings)
+            except Exception as exc:
+                warnings.append(f"Supplementary retrieval failed: {exc}")
+        elif evidence.get("needs_supplementary_search") and not markdown.strip():
+            warnings.append("Supplementary retrieval skipped because Markdown content is empty.")
+
+        if progress_callback:
+            progress_callback("Running debate...")
+        debate_context = {
+            "analysis": analysis,
+            "evidence": evidence,
+            "structured": structured,
+            "method": method_info,
+            "experiments": experiments,
+            "supplementary_results": supplementary_results,
+        }
+        try:
+            debate_state = await self.debate_chain.run(debate_context)
+            warnings.extend(
+                warning for warning in debate_state.warnings if warning not in warnings
+            )
+            if not debate_state.messages:
+                warnings.append("Debate produced no messages; using fallback debate state.")
+                debate_state = self._build_fallback_debate_state(debate_context)
+        except Exception as exc:
+            warnings.append(f"Debate failed: {exc}")
+            debate_state = self._build_fallback_debate_state(debate_context)
+
+        if progress_callback:
+            progress_callback("Generating report...")
+        debate_messages = [message.model_dump() for message in debate_state.messages]
+        try:
+            consensus = await self.consensus_detector.detect_consensus(
+                debate_messages,
+                analysis=analysis,
+                evidence=evidence,
+                supplementary_results=supplementary_results,
+            )
+        except Exception as exc:
+            warnings.append(f"Judge failed while extracting consensus: {exc}")
+            consensus = self._build_fallback_consensus(analysis, evidence, supplementary_results)
+
+        try:
+            confidence_score, conflict_intensity = await self.consensus_detector.compute_confidence(
+                debate_messages,
+                evidence=evidence,
+                supplementary_results=supplementary_results,
+            )
+        except Exception as exc:
+            warnings.append(f"Judge failed while computing confidence: {exc}")
+            confidence_score, conflict_intensity = 50.0, "medium"
+
+        report_payload = {
+            "analysis": analysis,
+            "structured": structured,
+            "method": method_info,
+            "experiments": experiments,
+            "evidence": evidence,
+            "supplementary_results": supplementary_results,
+            "debate": debate_state,
+            "consensus": consensus,
+            "confidence_score": confidence_score,
+            "conflict_intensity": conflict_intensity,
+            "warnings": warnings,
+        }
+        try:
+            report = await self.report_generator.generate(report_payload)
+            report_markdown = self.report_generator.format_markdown(report)
+        except Exception as exc:
+            warnings.append(f"Report generation failed: {exc}")
+            report_markdown = self._build_minimal_report(
+                analysis=analysis,
+                structured=structured,
+                consensus=consensus,
+                confidence_score=confidence_score,
+                conflict_intensity=conflict_intensity,
+                warnings=warnings,
+            )
+
+        await self.paper_store.save_paper(
+            paper_id,
+            {
+                "metadata": {
+                    "paper_id": paper_id,
+                    "source": source_label,
+                    "title": paper_title,
+                    "title_source": title_result.source,
+                    "title_confidence": title_result.confidence,
+                    "from_cache": markdown_input.from_cache,
+                },
+                "abstract": structured,
+                "markdown": markdown,
+                "report": report_markdown,
+            },
+        )
+
+        return AnalyzeWorkflowResult(
+            report_markdown=report_markdown,
+            report_title=paper_title,
+            from_cache=markdown_input.from_cache,
+            paper_id=paper_id,
+            supplementary_search_used=supplementary_search_used,
+            warnings=warnings,
+        )
+
+    def run_sync(
+        self,
+        options: AnalyzeOptions,
+        progress_callback: ProgressCallback = None,
+    ) -> AnalyzeWorkflowResult:
+        """Synchronous wrapper used by Typer commands."""
+
+        return asyncio.run(self.run(options, progress_callback))
+
+    def _build_pipeline(self) -> PDFPipeline:
+        if self.pipeline_factory is not None:
+            return self.pipeline_factory()
+        if not self.config.pdf.api_key:
+            raise ConfigurationError(
+                "MINERU_API_KEY not set. Run cached analyze by paper name, "
+                "or configure MINERU_API_KEY before converting PDFs."
+            )
+
+        mineru_client = MinerUClient(
+            api_key=self.config.pdf.api_key,
+            model_version="vlm",
+            api_endpoint=self.config.pdf.api_endpoint,
+        )
+        cache = MarkdownCache(cache_dir=self.config.pdf.cache_dir)
+        return PDFPipeline(
+            mineru_client=mineru_client,
+            cache=cache,
+            public_url_base=self.config.pdf.public_url_base,
+        )
+
+    def _build_fallback_debate_state(self, debate_context: dict) -> DebateState:
+        claims = [
+            str(item).strip()
+            for item in (
+                debate_context.get("analysis", {}).get("key_claims")
+                or [debate_context.get("analysis", {}).get("overview", "")]
+            )
+            if str(item).strip()
+        ]
+        support_content = "Fallback support position: the analysis pipeline retained a minimal positive case."
+        skeptic_content = (
+            "Fallback skeptic position: debate details were unavailable, so unresolved review risk remains."
+        )
+        evidence_refs = [
+            *[
+                str(item).strip()
+                for item in debate_context.get("evidence", {}).get("datasets", [])
+                if str(item).strip()
+            ],
+            *[
+                str(item).strip()
+                for item in debate_context.get("evidence", {}).get("metrics", [])
+                if str(item).strip()
+            ],
+        ]
+        return DebateState(
+            round=1,
+            current_claims=claims,
+            consensus_reached=False,
+            support_positions=[support_content],
+            skeptic_positions=[skeptic_content],
+            messages=[
+                AgentMessage(
+                    agent_role="support",
+                    round=1,
+                    content=support_content,
+                    evidence_refs=evidence_refs,
+                    claims_refs=claims,
+                ),
+                AgentMessage(
+                    agent_role="skeptic",
+                    round=1,
+                    content=skeptic_content,
+                    evidence_refs=evidence_refs,
+                    claims_refs=claims,
+                ),
+            ],
+        )
+
+    def _build_fallback_consensus(
+        self,
+        analysis: dict,
+        evidence: dict,
+        supplementary_results: list[dict],
+    ) -> dict[str, list[str]]:
+        consensus_items: list[str] = []
+        overview = str(analysis.get("overview", "")).strip()
+        if overview:
+            consensus_items.append(overview.rstrip(".") + ".")
+        if supplementary_results:
+            consensus_items.append("Supplementary retrieval returned related work for comparison.")
+
+        disagreements: list[str] = []
+        if not evidence.get("has_baseline"):
+            disagreements.append("Baseline comparisons remain unclear.")
+        if not evidence.get("has_ablation"):
+            disagreements.append("Ablation evidence is missing or incomplete.")
+        if not evidence.get("metrics"):
+            disagreements.append("Evaluation metrics are not clearly stated.")
+        if not disagreements:
+            disagreements.append("Judge details were unavailable and require manual review.")
+
+        supporting_evidence = [
+            str(item).strip()
+            for item in [
+                *evidence.get("datasets", []),
+                *evidence.get("metrics", []),
+            ]
+            if str(item).strip()
+        ]
+        return {
+            "consensus": consensus_items,
+            "disagreements": disagreements,
+            "supporting_evidence": list(dict.fromkeys(supporting_evidence)),
+        }
+
+    def _build_minimal_report(
+        self,
+        *,
+        analysis: dict,
+        structured: dict,
+        consensus: dict[str, list[str]],
+        confidence_score: float,
+        conflict_intensity: str,
+        warnings: list[str],
+    ) -> str:
+        overview = analysis.get("overview") or structured.get("problem") or "No overview available."
+        consensus_lines = "\n".join(f"- {item}" for item in consensus.get("consensus", [])) or "- None"
+        disagreement_lines = (
+            "\n".join(f"- {item}" for item in consensus.get("disagreements", [])) or "- None"
+        )
+        warning_lines = "\n".join(f"- {item}" for item in warnings) or "- None"
+        return f"""# Research Overview
+
+{overview}
+
+## Warnings
+
+{warning_lines}
+
+## Consensus vs Disagreement
+
+### Consensus
+
+{consensus_lines}
+
+### Disagreement
+
+{disagreement_lines}
+
+## Confidence Score
+
+- Confidence: {confidence_score:.2f}
+- Conflict intensity: {conflict_intensity}
+"""
