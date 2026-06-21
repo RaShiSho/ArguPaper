@@ -94,24 +94,45 @@ class EvidenceChain:
     def _build_evidence_table(self, experiments: dict) -> list[dict[str, str]]:
         metrics = ", ".join(experiments["metrics"]) or "Not specified"
         datasets = experiments["datasets"]
+        snippets = experiments.get("support_snippets", [])
         if datasets:
             return [
                 {
                     "dataset": dataset,
                     "metric": metrics,
-                    "support": "Referenced in evaluation section",
+                    "support": self._select_support_snippet(dataset, experiments["metrics"], snippets),
                 }
                 for dataset in datasets
-            ]
+            ][:8]
         if experiments["metrics"]:
             return [
                 {
                     "dataset": "Not specified",
                     "metric": metrics,
-                    "support": "Metrics were detected, but datasets were not clearly identified.",
+                    "support": (
+                        snippets[0]
+                        if snippets
+                        else "Metrics were detected, but datasets were not clearly identified."
+                    ),
                 }
             ]
         return []
+
+    def _select_support_snippet(
+        self,
+        dataset: str,
+        metrics: list[str],
+        snippets: list[str],
+    ) -> str:
+        dataset_lowered = dataset.casefold()
+        for snippet in snippets:
+            lowered = snippet.casefold()
+            if dataset_lowered in lowered and any(metric.casefold() in lowered for metric in metrics):
+                return snippet
+        for snippet in snippets:
+            if dataset_lowered in snippet.casefold():
+                return snippet
+        return "Referenced in experiment or evaluation section."
 
     def _extract_claims(self, paper_markdown: str) -> list[dict[str, str]]:
         focused_text = "\n".join(

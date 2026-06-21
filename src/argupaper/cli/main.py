@@ -3,7 +3,7 @@
 import typer
 
 from argupaper import __version__
-from argupaper.cli.commands import chat, convert, debate, papers, rag_app, search
+from argupaper.cli.commands import chat, convert, debate, papers, search, court, rag_app
 
 app = typer.Typer(
     name="argupaper",
@@ -13,6 +13,7 @@ app = typer.Typer(
 
 app.command("chat")(chat)
 app.command("convert")(convert)
+app.command("court")(court)
 app.command("debate")(debate)
 app.command("papers")(papers)
 app.add_typer(rag_app, name="rag")

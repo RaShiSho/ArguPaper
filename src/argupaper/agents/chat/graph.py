@@ -516,7 +516,15 @@ class ChatAgentRuntime:
                 return {"action": "tool_call", "tool": "select_paper", "arguments": {"paper": ""}}
             return {"action": "tool_call", "tool": "select_paper", "arguments": {"paper": argument}}
         if normalized == "/debate":
-            return {"action": "tool_call", "tool": "debate_paper", "arguments": {"rounds": 3}}
+            arguments = {"rounds": 3}
+            if argument:
+                arguments["paper_id"] = argument
+            return {"action": "tool_call", "tool": "debate_paper", "arguments": arguments}
+        if normalized == "/court":
+            arguments = {"max_rounds": 2}
+            if argument:
+                arguments["paper_id"] = argument
+            return {"action": "tool_call", "tool": "court_paper", "arguments": arguments}
         return {
             "action": "tool_call",
             "tool": "unknown_slash_command",
@@ -589,6 +597,15 @@ class ChatAgentRuntime:
                 "from_cache": data.get("from_cache"),
                 "supplementary_search_used": data.get("supplementary_search_used"),
                 "warnings": data.get("warnings", []),
+                "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 9000),
+            }
+        elif tool == "court_paper":
+            compact["data"] = {
+                "paper_id": data.get("paper_id"),
+                "report_title": data.get("report_title"),
+                "warnings": data.get("warnings", []),
+                "claims": list(data.get("claims", []) or [])[:8],
+                "verdicts": list(data.get("verdicts", []) or [])[:8],
                 "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 9000),
             }
         elif tool == "search_papers":
@@ -953,7 +970,7 @@ def default_paper_id(
 ) -> dict[str, Any]:
     """Fill paper_id from the selected paper when a tool omitted it."""
 
-    if tool_name not in {"read_paper_context", "read_paper_fulltext", "debate_paper"}:
+    if tool_name not in {"read_paper_context", "read_paper_fulltext", "debate_paper", "court_paper"}:
         return arguments
     if arguments.get("paper_id") or selected_paper is None:
         return arguments

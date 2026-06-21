@@ -356,8 +356,11 @@ uv run argupaper papers --query paper
 - 执行命令：
 
 ```powershell
-uv run argupaper search "给我10篇有关多智能体的论文，要求近一年的" --source google_scholar --verbose
-uv run argupaper search "给我10篇有关多智能体的论文，要求近一年的" --source semantic_scholar --verbose
+uv run argupaper convert .\WTF.pdf
+uv run argupaper papers
+uv run argupaper papers <paper_id>
+uv run argupaper debate <paper_id_or_cache_name> --rounds 1
+uv run argupaper papers <paper_id>
 ```
 
 - 预期结果：第一条命令返回 `source=google_scholar` 的论文列表；第二条命令若 Semantic Scholar 返回 403/429，应出现 `Fell back to Google Scholar via SerpApi` warning 且仍返回论文结果
@@ -581,3 +584,21 @@ uv run argupaper chat
 
 - 预期结果：编译与 chat help 均成功；`/papers` 仍列出本地 PaperStore 记录；自然语言请求进入 Planner + ReAct 时不因 prompt 文件加载、模板变量或 JSON 示例花括号报错；ReAct prompt 中本地库检索示例为可读 UTF-8 文本
 - 记录：___
+### 29. Adversarial Paper Court
+
+- 功能名称：`argupaper court` claim 级对抗式论文审查
+- 适用场景：验证 court 子图可从 PaperStore 读取论文，提取 claim，绑定 evidence，生成 challenge/defense/verdict，并输出 Markdown 报告
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在至少一条带 `paper.md` 的记录；如需外部相关论文 evidence，已配置可用检索源
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper court <paper_id> --rounds 2 --output output/court-smoke.md
+uv run argupaper chat
+/use <paper_id>
+/court
+/exit
+```
+
+- 预期结果：编译成功；CLI 输出 `Critical Claim Report`，报告中包含 claim、evidence、challenge、defense、unresolved_disputes、risk_level、suggested_revision、required_check；evidence 保留 `chunk_id`、`source`、`page`、`section`；chat 中 `/court` 可对 selected paper 调用同一 court workflow。
+- 记录：__

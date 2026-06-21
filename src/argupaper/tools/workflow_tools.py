@@ -6,8 +6,8 @@ from collections.abc import Callable
 
 from argupaper.config import Config
 from argupaper.tools.registry import ToolRegistry
-from argupaper.tools.schemas import DebatePaperArgs, SearchPapersArgs, ToolResult
-from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow, SearchOptions
+from argupaper.tools.schemas import CourtPaperArgs, DebatePaperArgs, SearchPapersArgs, ToolResult
+from argupaper.workflows import AnalyzeOptions, AnalyzeWorkflow, CourtOptions, CourtWorkflow, SearchOptions
 from argupaper.workflows.search import InteractiveSearchWorkflow
 
 ProgressCallback = Callable[[str], None] | None
@@ -27,6 +27,12 @@ def register_workflow_tools(
         "Run multi-agent debate analysis for a selected or explicit paper id using the existing workflow.",
         toolbox.debate_paper,
         args_schema=DebatePaperArgs,
+    )
+    registry.register(
+        "court_paper",
+        "Run Adversarial Paper Court claim-level review for a selected or explicit paper id.",
+        toolbox.court_paper,
+        args_schema=CourtPaperArgs,
     )
     registry.register(
         "search_papers",
@@ -70,6 +76,41 @@ class WorkflowToolbox:
                 "supplementary_search_used": result.supplementary_search_used,
                 "warnings": result.warnings,
                 "report_excerpt": self._truncate(result.report_markdown, 3000),
+            },
+        )
+
+    async def court_paper(self, paper_id: str | None = None, max_rounds: int = 2) -> ToolResult:
+        """Run the adversarial paper court workflow for a converted paper."""
+
+        if not paper_id:
+            return ToolResult(
+                tool="court_paper",
+                ok=False,
+                summary="No paper is selected. Use /use <paper-id-or-name> first.",
+                data={},
+            )
+        self._progress(f"Running adversarial paper court for {paper_id}...")
+        workflow = CourtWorkflow(self.config)
+        result = await workflow.run(
+            CourtOptions(paper_id=paper_id, max_rounds=max_rounds),
+            progress_callback=self._progress,
+        )
+        report = result.structured_report
+        return ToolResult(
+            tool="court_paper",
+            ok=True,
+            summary=(
+                f"Paper court complete for {result.paper_id}: "
+                f"{len(report.claims)} claim(s), {len(report.verdicts)} verdict(s), "
+                f"stop reason: {report.stop_reason}."
+            ),
+            data={
+                "paper_id": result.paper_id,
+                "report_title": result.report_title,
+                "warnings": result.warnings,
+                "claims": [item.model_dump() for item in report.claims],
+                "verdicts": [item.model_dump() for item in report.verdicts],
+                "report_excerpt": self._truncate(result.report_markdown, 4000),
             },
         )
 
