@@ -11,6 +11,7 @@ from argupaper.cli.commands.common import (
     resolve_convert_output_path,
 )
 from argupaper.cli.commands.convert import convert
+from argupaper.cli.commands.court import court
 from argupaper.cli.commands.debate import debate
 from argupaper.cli.commands.papers import papers
 from argupaper.cli.commands.search import search
@@ -22,6 +23,7 @@ __all__ = [
     "build_search_workflow",
     "chat",
     "convert",
+    "court",
     "debate",
     "papers",
     "resolve_analyze_output_path",

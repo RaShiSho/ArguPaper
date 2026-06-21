@@ -218,6 +218,12 @@ _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
         "paper": "paper_id",
         "name": "paper_id",
     },
+    "court_paper": {
+        "id": "paper_id",
+        "paper": "paper_id",
+        "name": "paper_id",
+        "rounds": "max_rounds",
+    },
     "list_papers": {
         "keyword": "query",
         "keywords": "query",

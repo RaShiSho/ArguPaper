@@ -35,6 +35,13 @@ class DebatePaperArgs(BaseModel):
     rounds: int = Field(default=3, ge=1, le=8)
 
 
+class CourtPaperArgs(BaseModel):
+    """Arguments for running adversarial paper court review for one paper."""
+
+    paper_id: str | None = Field(default=None, description="Paper id. Defaults to selected paper.")
+    max_rounds: int = Field(default=2, ge=1, le=8)
+
+
 class SearchPapersArgs(BaseModel):
     """Arguments for external paper search."""
 
@@ -68,6 +75,7 @@ class ReadPaperFullTextArgs(BaseModel):
 
 __all__ = [
     "DebatePaperArgs",
+    "CourtPaperArgs",
     "ListPapersArgs",
     "ReadPaperContextArgs",
     "ReadPaperFullTextArgs",

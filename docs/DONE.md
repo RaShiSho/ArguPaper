@@ -1,5 +1,18 @@
 # DONE
 
+## Adversarial Paper Court
+
+完成时间：2026-06-21
+
+本次新增 claim 级对抗式论文审查能力：
+
+- 新增 `argupaper court <paper_id>` CLI 命令，以及 chat slash command `/court <paper_id>`。
+- 新增 `argupaper.agents.court` LangGraph 子图，流程为 `ClaimExtractor -> EvidenceBinder -> Challenger -> Proposer -> Adjudicator -> ReportGenerator`。
+- 新增结构化模型 `Claim`、`Evidence`、`Argument`、`Dispute`、`ClaimVerdict`、`CriticalClaimReport`，court 节点通过 Pydantic 对象传递结果。
+- `EvidenceBinder` 复用 PaperStore Markdown 和现有 `SearchWorkflow`，保留 `chunk_id`、`source`、`page`、`section` 引用字段；当前仓库未提供可调用 Milvus adapter，相关取舍记录在 `output/key info.md`。
+- 新增 `court_paper` Agent tool，使 LangGraph chat Agent 可路由调用 court 子图。
+- 最终输出 Markdown `CriticalClaimReport`，覆盖 claim、evidence、challenge、defense、unresolved_disputes、risk_level、suggested_revision、required_check。
+
 ## Analyze 用户入口重命名为 Debate
 
 完成时间：2026-06-19

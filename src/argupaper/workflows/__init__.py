@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from argupaper.workflows.analyze import AnalyzeWorkflow
     from argupaper.workflows.convert import ConvertOptions, ConvertWorkflow, ConvertWorkflowResult, FolderConvertSummary
+    from argupaper.workflows.court import CourtOptions, CourtWorkflow, CourtWorkflowResult
     from argupaper.workflows.errors import (
         ConfigurationError,
         ExternalServiceError,
@@ -34,6 +35,9 @@ __all__ = [
     "ConvertOptions",
     "ConvertWorkflow",
     "ConvertWorkflowResult",
+    "CourtOptions",
+    "CourtWorkflow",
+    "CourtWorkflowResult",
     "ExternalServiceError",
     "FolderConvertSummary",
     "InputValidationError",
@@ -65,6 +69,10 @@ def __getattr__(name: str) -> Any:
         from argupaper.workflows import convert
 
         return getattr(convert, name)
+    if name in {"CourtOptions", "CourtWorkflow", "CourtWorkflowResult"}:
+        from argupaper.workflows import court
+
+        return getattr(court, name)
     if name in {"PapersOptions", "PapersWorkflow", "PapersWorkflowResult"}:
         from argupaper.workflows import papers
 
