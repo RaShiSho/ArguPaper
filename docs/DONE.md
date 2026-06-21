@@ -1,5 +1,17 @@
 # DONE
 
+## Court RAG Evidence Binder
+
+完成时间：2026-06-21
+
+本次将 Adversarial Paper Court 的证据绑定接入已合并的本地 RAG 实现：
+
+- `EvidenceBinder` 在 `RAG_ENABLED=true` 时优先复用 `RAGRetriever`，通过 Ollama embedding 与 Milvus 检索已索引论文 chunk。
+- RAG 返回的 `RetrievedChunk` 会映射为现有 `Evidence(kind="paper_chunk")`，并保留 `chunk_id`、`source`、`page`、`section`、`score` 与 `text`。
+- RAG 未启用、服务失败或没有命中 chunk 时，court 会回退到 PaperStore Markdown chunk，并在报告 warnings 中说明。
+- Court 不自动索引论文；需要 RAG 证据时仍需先运行 `argupaper rag index <paper_id>`。
+- 外部相关论文检索继续使用 `SearchWorkflow`，不与本地 Milvus chunk 检索混合职责。
+
 ## RAG Chat Agent Tools
 
 Completed: 2026-06-21

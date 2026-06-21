@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -13,6 +13,7 @@ from argupaper.config import Config
 from argupaper.domain.court import Argument, Claim, ClaimVerdict, CriticalClaimReport, Dispute, Evidence
 from argupaper.domain.court.models import AttackTemplate, ClaimType, VerdictLabel
 from argupaper.domain.paper.structured import StructuredExtractor
+from argupaper.services.rag import RAGRetriever, RetrievedChunk, RetrievalQuery, build_rag_retriever
 from argupaper.workflows.models import SearchOptions
 from argupaper.workflows.search.workflow import SearchWorkflow
 
@@ -57,12 +58,14 @@ class PaperCourtGraph:
         self,
         config: Config,
         *,
+        rag_retriever_factory: Callable[[], RAGRetriever] | None = None,
         search_workflow_factory: Callable[[], SearchWorkflow] | None = None,
         progress_callback: ProgressCallback = None,
     ) -> None:
         self.config = config
         self.progress_callback = progress_callback
         self.extractor = StructuredExtractor()
+        self.rag_retriever_factory = rag_retriever_factory or (lambda: build_rag_retriever(config.rag))
         self.search_workflow_factory = search_workflow_factory or (lambda: SearchWorkflow(config))
         self.graph = self._build_graph()
 
@@ -136,8 +139,19 @@ class PaperCourtGraph:
         chunks = self._chunk_markdown(state["paper_id"], state["markdown"])
         evidence: list[Evidence] = []
         warnings = list(state["warnings"])
+        rag_evidence: list[Evidence] = []
+
+        if self.config.rag_enabled:
+            rag_evidence = await self._bind_rag_evidence(state["paper_id"], state["claims"], warnings)
+        else:
+            warnings.append("Court RAG retrieval skipped because RAG_ENABLED=false; using PaperStore chunk fallback.")
 
         for claim in state["claims"]:
+            claim_rag_evidence = self._evidence_for_claim(rag_evidence, claim.claim_id)
+            if claim_rag_evidence:
+                evidence.extend(claim_rag_evidence)
+                evidence.extend(self._caption_evidence_from_rag(claim, claim_rag_evidence))
+                continue
             evidence.extend(self._bind_local_evidence(claim, chunks))
             evidence.extend(self._bind_caption_evidence(claim, chunks))
 
@@ -395,6 +409,98 @@ class PaperCourtGraph:
             if len(evidence) >= 2:
                 break
         return evidence
+
+    async def _bind_rag_evidence(
+        self,
+        paper_id: str,
+        claims: list[Claim],
+        warnings: list[str],
+    ) -> list[Evidence]:
+        self._progress("Court EvidenceBinder: retrieving indexed RAG chunks...")
+        retriever: RAGRetriever | None = None
+        evidence: list[Evidence] = []
+        try:
+            retriever = self.rag_retriever_factory()
+            for claim in claims:
+                result = await retriever.retrieve(
+                    RetrievalQuery(
+                        text=claim.text,
+                        top_k=self.config.rag.top_k,
+                        paper_id=paper_id,
+                    )
+                )
+                warnings.extend(
+                    f"RAG retrieval warning for {claim.claim_id}: {warning}"
+                    for warning in result.warnings
+                )
+                evidence.extend(self._rag_chunks_to_evidence(claim, result.chunks))
+        except Exception as exc:
+            warnings.append(
+                "Court RAG retrieval failed; using PaperStore chunk fallback. "
+                f"Run `argupaper rag index {paper_id}` after fixing RAG services if this paper is not indexed. "
+                f"Reason: {type(exc).__name__}: {exc}"
+            )
+            return []
+        finally:
+            if retriever is not None:
+                await self._close_rag_retriever(retriever)
+
+        if not evidence:
+            warnings.append(
+                "Court RAG retrieval returned no chunks; using PaperStore chunk fallback. "
+                f"If this paper should use RAG evidence, run `argupaper rag index {paper_id}` first."
+            )
+        return evidence
+
+    def _rag_chunks_to_evidence(self, claim: Claim, chunks: list[RetrievedChunk]) -> list[Evidence]:
+        return [
+            Evidence(
+                evidence_id=f"rag-{claim.claim_id}-{index}",
+                claim_id=claim.claim_id,
+                kind="paper_chunk",
+                text=self._truncate(chunk.text, 700),
+                chunk_id=chunk.chunk_id,
+                source=chunk.source or f"paper:{chunk.paper_id}",
+                page=chunk.page_start,
+                section=chunk.section or chunk.section_type or "unknown",
+                score=round(chunk.score, 4),
+            )
+            for index, chunk in enumerate(chunks, start=1)
+        ]
+
+    def _caption_evidence_from_rag(self, claim: Claim, evidence: list[Evidence]) -> list[Evidence]:
+        claim_tokens = self._tokens(claim.text)
+        captions: list[Evidence] = []
+        for item in evidence:
+            text = item.text
+            if not re.search(r"\b(?:figure|fig\.|table)\s*\d*", text, flags=re.I):
+                continue
+            overlap = claim_tokens & self._tokens(text)
+            if not overlap:
+                continue
+            kind = "table_caption" if re.search(r"\btable\b", text, flags=re.I) else "figure_caption"
+            captions.append(
+                Evidence(
+                    evidence_id=f"rag-caption-{claim.claim_id}-{len(captions) + 1}",
+                    claim_id=claim.claim_id,
+                    kind=kind,
+                    text=self._truncate(text, 500),
+                    chunk_id=item.chunk_id,
+                    source=item.source,
+                    page=item.page,
+                    section=item.section,
+                    score=item.score,
+                )
+            )
+            if len(captions) >= 2:
+                break
+        return captions
+
+    async def _close_rag_retriever(self, retriever: RAGRetriever) -> None:
+        try:
+            await retriever.embedding_client.close()
+        finally:
+            retriever.vector_store.close()
 
     async def _search_external_related_work(
         self,
@@ -708,8 +814,13 @@ class PaperCourtGraph:
 def build_paper_court_graph(
     config: Config,
     *,
+    rag_retriever_factory: Callable[[], RAGRetriever] | None = None,
     progress_callback: ProgressCallback = None,
 ) -> PaperCourtGraph:
     """Build the default paper court subgraph wrapper."""
 
-    return PaperCourtGraph(config, progress_callback=progress_callback)
+    return PaperCourtGraph(
+        config,
+        rag_retriever_factory=rag_retriever_factory,
+        progress_callback=progress_callback,
+    )

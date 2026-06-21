@@ -1,5 +1,27 @@
 # SMOKE
 
+## Court RAG Evidence Binder
+
+- 功能名称：`argupaper court` 优先使用本地 RAG/Milvus 证据
+- 适用场景：验证 court 的 EvidenceBinder 在 RAG 可用时引用 Milvus chunk，在 RAG 不可用时回退到 PaperStore chunk
+- 前置条件：已执行 `uv sync`；`PAPER_STORAGE_PATH` 中存在至少一条带 `paper.md` 的记录；RAG 命中路径需要本地 Milvus 与 Ollama `bge-m3`
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper court --help
+$env:RAG_ENABLED = "true"
+$env:MILVUS_URI = "http://localhost:19530"
+$env:OLLAMA_BASE_URL = "http://localhost:11434"
+uv run argupaper rag index <paper_id>
+uv run argupaper court <paper_id> --rounds 1 --output output/court-rag-smoke.md
+$env:RAG_ENABLED = "false"
+uv run argupaper court <paper_id> --rounds 1 --output output/court-fallback-smoke.md
+```
+
+- 预期结果：RAG 命中路径的报告 evidence 包含 Milvus chunk 的 `chunk_id`、`source`、`page`、`section`、`score`；RAG 关闭、未索引或服务不可用时命令仍生成报告，并在 warnings 中说明已使用 PaperStore chunk fallback。
+- 记录：__
+
 ## RAG Chat Agent Tools
 
 - Feature: Chat Agent can call RAG search and indexing tools through the existing tool executor.
