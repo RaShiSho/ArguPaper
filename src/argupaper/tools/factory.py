@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from argupaper.config import Config
 from argupaper.tools.paper_tools import register_paper_tools
+from argupaper.tools.rag_tools import register_rag_tools
 from argupaper.tools.registry import LangChainToolbox, ToolRegistry
 from argupaper.tools.workflow_tools import register_workflow_tools
 
@@ -20,6 +21,7 @@ def build_default_tool_registry(
 
     registry = ToolRegistry()
     register_paper_tools(registry, config, progress_callback=progress_callback)
+    register_rag_tools(registry, config, progress_callback=progress_callback)
     register_workflow_tools(registry, config, progress_callback=progress_callback)
     return registry
 

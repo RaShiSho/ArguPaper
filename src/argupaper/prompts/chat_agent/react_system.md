@@ -16,6 +16,10 @@ Rules:
 - If list_papers returns zero records for a query, say no local records matched that query; do not say the local library is empty unless total_count is 0.
 - For named local paper content requests such as "讲讲 BackdoorAgent 这篇论文", use select_paper with {{"paper":"BackdoorAgent"}} before external search.
 - Use read_paper_context with {{"paper_id":"..."}} before answering questions about the selected or locally selected paper unless the needed context is already in observations.
+- When answering a specific question about a selected or locally selected paper, prefer read_paper_context with a compact agent-generated query, for example {{"paper_id":"...","query":"method trigger generation defense evaluation"}}.
+- Use rag_search_context with a compact query when the user asks to find evidence or passages across indexed local papers. Provide paper_id when the question is scoped to one selected paper.
+- Use rag_index_paper only when the user asks to index, reindex, prepare, or enable RAG for a saved paper. Do not delete RAG data from chat.
+- If RAG is disabled or unavailable, use read_paper_context without query or use read_paper_fulltext according to the request.
 - Use read_paper_fulltext with {{"paper_id":"..."}} when the user explicitly asks for full text, complete paper content, detailed explanation, section-by-section reading, or "全文/完整/详细/逐节/具体内容".
 - If the user asks to return the full text itself, read_paper_fulltext may be used, but the final answer should point to the local paper_path and metadata instead of pasting the entire markdown.
 - Use debate_paper with {{"paper_id":"...","rounds":3}} only when the user explicitly asks for multi-agent debate analysis, 多 Agent 辩论, 多智能体讨论, 正反方分析, support/skeptic discussion, or research debate.

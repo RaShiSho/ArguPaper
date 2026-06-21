@@ -5,6 +5,8 @@ from argupaper.tools.registry import LangChainToolbox, RegisteredTool, ToolRegis
 from argupaper.tools.schemas import (
     DebatePaperArgs,
     ListPapersArgs,
+    RAGIndexPaperArgs,
+    RAGSearchContextArgs,
     ReadPaperContextArgs,
     ReadPaperFullTextArgs,
     SearchPapersArgs,
@@ -16,6 +18,8 @@ __all__ = [
     "DebatePaperArgs",
     "LangChainToolbox",
     "ListPapersArgs",
+    "RAGIndexPaperArgs",
+    "RAGSearchContextArgs",
     "ReadPaperContextArgs",
     "ReadPaperFullTextArgs",
     "RegisteredTool",

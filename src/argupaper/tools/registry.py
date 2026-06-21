@@ -128,6 +128,7 @@ class LangChainToolbox:
                 "summary": f"Unknown tool: {name}",
                 "data": {"available_tools": sorted(self.tools_by_name)},
                 "warnings": [],
+                "observations": {},
             }
         try:
             result = await tool.ainvoke(arguments)
@@ -138,6 +139,7 @@ class LangChainToolbox:
                 "summary": f"{name} failed: {exc}",
                 "data": {"error_type": type(exc).__name__, "error": str(exc)},
                 "warnings": [],
+                "observations": {},
             }
         return self._normalize_result(name, result)
 
@@ -186,12 +188,15 @@ class LangChainToolbox:
         payload.setdefault("summary", "")
         payload.setdefault("data", {})
         payload.setdefault("warnings", [])
+        payload.setdefault("observations", {})
         if not payload.get("tool"):
             payload["tool"] = tool_name
         if payload.get("data") is None:
             payload["data"] = {}
         if payload.get("warnings") is None:
             payload["warnings"] = []
+        if payload.get("observations") is None:
+            payload["observations"] = {}
         return payload
 
 
@@ -204,6 +209,20 @@ _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
         "title": "paper",
     },
     "read_paper_context": {
+        "content": "query",
+        "id": "paper_id",
+        "paper": "paper_id",
+        "question": "query",
+        "name": "paper_id",
+    },
+    "rag_search_context": {
+        "content": "query",
+        "id": "paper_id",
+        "paper": "paper_id",
+        "question": "query",
+        "name": "paper_id",
+    },
+    "rag_index_paper": {
         "id": "paper_id",
         "paper": "paper_id",
         "name": "paper_id",

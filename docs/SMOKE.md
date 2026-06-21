@@ -1,5 +1,24 @@
 # SMOKE
 
+## RAG Chat Agent Tools
+
+- Feature: Chat Agent can call RAG search and indexing tools through the existing tool executor.
+- Scenario: Verify tool registry exposure, compact observations, `read_paper_context` RAG-first behavior, and fallback when RAG is unavailable.
+- Preconditions: `uv sync` has been run. For live RAG search/index, run `milvus-server --data .\data\milvus-server`, use `MILVUS_URI=http://127.0.0.1:19530`, and run local Ollama with `bge-m3`.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run python -c "from argupaper.config import load_config; from argupaper.tools import build_default_toolbox; c=load_config(require_pdf_api_key=False); t=build_default_toolbox(c); specs=t.tool_specs(); print('rag_search_context' in specs, 'rag_index_paper' in specs)"
+$env:RAG_ENABLED = "false"
+uv run python -c "import asyncio`nfrom argupaper.config import load_config`nfrom argupaper.tools import build_default_toolbox`nasync def main():`n    c=load_config(require_pdf_api_key=False)`n    t=build_default_toolbox(c)`n    result=await t.ainvoke('rag_search_context', {'query':'method details'})`n    print(result['ok'], 'observations' in result, result['observations'].get('query'))`nasyncio.run(main())"
+```
+
+- Optional live smoke: set `RAG_ENABLED=true`, index a saved paper with `rag_index_paper`, then call `read_paper_context` with `paper_id` and a focused `query`; verify the result contains `data.rag_chunks`, top-level `observations.query`, compact chunk excerpts, and no full markdown.
+- Chat log expectation: `data/logs/chat/*.jsonl` contains `tool_call` and `tool_observation` events for RAG tools or RAG-enhanced `read_paper_context`; logged observations include query/chunk summary/warnings and do not include full paper markdown.
+- Expected result: RAG tools are visible to the Agent, disabled/unavailable RAG returns readable warnings, and `read_paper_context` keeps the original PaperStore fallback.
+- Record: ___
+
 ## RAG Milvus Server Metric Compatibility
 
 - Feature: RAG vector storage works with local `milvus-server` instances that support `IP` and `L2` but not `COSINE`.

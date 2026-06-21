@@ -408,6 +408,14 @@ class ChatAgentRuntime:
         if selected_payload:
             update["selected_paper"] = SelectedPaper(**selected_payload)
         warnings = list(state.get("warnings", []))
+        for warning in observation.get("warnings", []) or []:
+            if warning not in warnings:
+                warnings.append(str(warning))
+        observation_details = observation.get("observations", {})
+        if isinstance(observation_details, dict):
+            for warning in observation_details.get("warnings", []) or []:
+                if warning not in warnings:
+                    warnings.append(str(warning))
         for warning in observation.get("data", {}).get("warnings", []) or []:
             if warning not in warnings:
                 warnings.append(str(warning))
@@ -561,12 +569,32 @@ class ChatAgentRuntime:
             "summary": str(observation.get("summary", "")),
         }
         if tool == "read_paper_context":
-            compact["data"] = {
-                "metadata": data.get("metadata", {}),
-                "abstract": data.get("abstract", {}),
-                "markdown_excerpt": self._truncate_text(str(data.get("markdown_excerpt", "")), 9000),
-                "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 7000),
-            }
+            if data.get("rag_chunks") or data.get("rag_context"):
+                observations = dict(observation.get("observations", {}) or {})
+                compact["data"] = {
+                    "metadata": data.get("metadata", {}),
+                    "abstract": data.get("abstract", {}),
+                    "rag_query": data.get("rag_query"),
+                    "rag_chunks": list(data.get("rag_chunks", []) or [])[:8],
+                    "rag_context": self._truncate_text(str(data.get("rag_context", "")), 12000),
+                    "rag_log_path": data.get("rag_log_path"),
+                }
+                compact["observations"] = {
+                    "query": observations.get("query"),
+                    "paper_id": observations.get("paper_id"),
+                    "chunk_count": observations.get("chunk_count"),
+                    "chunks": list(observations.get("chunks", []) or [])[:8],
+                    "summary": observations.get("summary"),
+                    "warnings": observations.get("warnings", []),
+                    "rag_log_path": observations.get("rag_log_path"),
+                }
+            else:
+                compact["data"] = {
+                    "metadata": data.get("metadata", {}),
+                    "abstract": data.get("abstract", {}),
+                    "markdown_excerpt": self._truncate_text(str(data.get("markdown_excerpt", "")), 9000),
+                    "report_excerpt": self._truncate_text(str(data.get("report_excerpt", "")), 7000),
+                }
         elif tool == "read_paper_fulltext":
             markdown = str(data.get("markdown", ""))
             report = str(data.get("report", ""))
@@ -615,6 +643,34 @@ class ChatAgentRuntime:
                 "retrieved_count": data.get("retrieved_count"),
                 "filtered_count": data.get("filtered_count"),
             }
+        elif tool == "rag_search_context":
+            observations = dict(observation.get("observations", {}) or {})
+            compact["observations"] = {
+                "query": observations.get("query"),
+                "paper_id": observations.get("paper_id"),
+                "chunk_count": observations.get("chunk_count"),
+                "chunks": list(observations.get("chunks", []) or [])[:8],
+                "context": self._truncate_text(str(observations.get("context", "")), 12000),
+                "summary": observations.get("summary"),
+                "warnings": observations.get("warnings", []),
+                "rag_log_path": observations.get("rag_log_path"),
+            }
+            compact["data"] = {
+                "query": data.get("query"),
+                "paper_id": data.get("paper_id"),
+                "top_k": data.get("top_k"),
+                "warnings": data.get("warnings", []),
+                "rag_log_path": data.get("rag_log_path"),
+            }
+        elif tool == "rag_index_paper":
+            compact["data"] = {
+                "paper_id": data.get("paper_id"),
+                "chunk_count": data.get("chunk_count"),
+                "embedding_dim": data.get("embedding_dim"),
+                "skipped_sections": data.get("skipped_sections", []),
+                "warnings": data.get("warnings", []),
+                "rag_log_path": data.get("rag_log_path"),
+            }
         elif tool == "list_papers":
             compact["data"] = {
                 "records": list(data.get("records", []) or [])[:20],
@@ -628,7 +684,12 @@ class ChatAgentRuntime:
         return compact
 
     def _redact_observation_for_log(self, observation: dict[str, Any]) -> dict[str, Any]:
-        if str(observation.get("tool", "")) != "read_paper_fulltext":
+        tool = str(observation.get("tool", ""))
+        if tool in {"rag_search_context", "rag_index_paper"}:
+            return self._compact_observation_for_response(observation)
+        if tool == "read_paper_context" and observation.get("observations"):
+            return self._compact_observation_for_response(observation)
+        if tool != "read_paper_fulltext":
             return observation
         redacted = dict(observation)
         data = dict(redacted.get("data", {}) or {})
@@ -970,7 +1031,14 @@ def default_paper_id(
 ) -> dict[str, Any]:
     """Fill paper_id from the selected paper when a tool omitted it."""
 
-    if tool_name not in {"read_paper_context", "read_paper_fulltext", "debate_paper", "court_paper"}:
+    if tool_name not in {
+        "read_paper_context",
+        "read_paper_fulltext",
+        "debate_paper",
+        "court_paper",
+        "rag_search_context",
+        "rag_index_paper",
+    }:
         return arguments
     if arguments.get("paper_id") or selected_paper is None:
         return arguments

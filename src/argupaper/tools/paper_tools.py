@@ -10,6 +10,7 @@ from typing import Any
 
 from argupaper.config import Config
 from argupaper.memory.paper_store import PaperStore
+from argupaper.tools.rag_tools import build_rag_search_observations
 from argupaper.tools.registry import ToolRegistry
 from argupaper.tools.schemas import (
     ListPapersArgs,
@@ -19,6 +20,8 @@ from argupaper.tools.schemas import (
     ToolResult,
 )
 from argupaper.workflows.papers import PapersOptions, PapersWorkflow
+from argupaper.workflows.rag import RAGWorkflow
+from argupaper.workflows.rag.options import RAGSearchOptions
 
 ProgressCallback = Callable[[str], None] | None
 
@@ -46,7 +49,7 @@ def register_paper_tools(
     )
     registry.register(
         "read_paper_context",
-        "Read metadata, structured summary, markdown excerpt, and report excerpt for a paper.",
+        "Read focused paper context; when query is provided and RAG is enabled, retrieve indexed chunks first, otherwise return PaperStore excerpts.",
         toolbox.read_paper_context,
         args_schema=ReadPaperContextArgs,
     )
@@ -62,6 +65,7 @@ class PaperToolbox:
     """PaperStore operations exposed as reusable Agent tools."""
 
     def __init__(self, config: Config, *, progress_callback: ProgressCallback = None) -> None:
+        self.config = config
         self.paper_store = PaperStore(storage_path=config.paper_storage_path)
         self.progress_callback = progress_callback
 
@@ -154,7 +158,12 @@ class PaperToolbox:
             data={},
         )
 
-    async def read_paper_context(self, paper_id: str | None = None, max_chars: int = 6000) -> ToolResult:
+    async def read_paper_context(
+        self,
+        paper_id: str | None = None,
+        query: str | None = None,
+        max_chars: int = 6000,
+    ) -> ToolResult:
         """Read paper context from PaperStore."""
 
         if not paper_id:
@@ -175,8 +184,21 @@ class PaperToolbox:
             )
         metadata = self._record_metadata(record)
         abstract = record.get("abstract", {})
+        rag_fallback_warnings: list[str] = []
+        rag_result = await self._try_read_rag_context(
+            paper_id=paper_id,
+            query=query,
+            metadata=metadata,
+            abstract=abstract,
+            max_chars=max_chars,
+            fallback_warnings=rag_fallback_warnings,
+        )
+        if rag_result is not None:
+            return rag_result
+
         markdown = str(record.get("markdown", ""))
         report = str(record.get("report", ""))
+        fallback_warnings = [*rag_fallback_warnings, *self._rag_skip_warnings(query)]
         return ToolResult(
             tool="read_paper_context",
             ok=True,
@@ -186,6 +208,13 @@ class PaperToolbox:
                 "abstract": abstract,
                 "markdown_excerpt": self._truncate(markdown, max_chars),
                 "report_excerpt": self._truncate(report, max_chars),
+            },
+            warnings=fallback_warnings,
+            observations={
+                "query": str(query or "").strip(),
+                "chunks": [],
+                "summary": "RAG was not used; returned PaperStore context.",
+                "warnings": fallback_warnings,
             },
         )
 
@@ -382,6 +411,77 @@ class PaperToolbox:
 
     def _record_metadata(self, record: dict[str, Any]) -> dict[str, Any]:
         return dict(record.get("metadata", record))
+
+    async def _try_read_rag_context(
+        self,
+        *,
+        paper_id: str,
+        query: str | None,
+        metadata: dict[str, Any],
+        abstract: Any,
+        max_chars: int,
+        fallback_warnings: list[str],
+    ) -> ToolResult | None:
+        normalized_query = str(query or "").strip()
+        if not self.config.rag.enabled or not normalized_query:
+            return None
+
+        self._progress(f"Searching RAG context for {paper_id}...")
+        workflow = RAGWorkflow(self.config, paper_store=self.paper_store)
+        try:
+            result = await workflow.search(
+                RAGSearchOptions(
+                    content=normalized_query,
+                    paper_id=paper_id,
+                    top_k=self.config.rag.top_k,
+                    context_max_chars=max_chars,
+                ),
+                progress_callback=self.progress_callback,
+            )
+        except Exception as exc:  # noqa: BLE001 - RAG is optional for this fallback tool
+            warning = f"RAG context search failed; falling back to PaperStore context: {type(exc).__name__}: {exc}"
+            fallback_warnings.append(warning)
+            self._progress(warning)
+            return None
+        finally:
+            await workflow.close()
+
+        observations = build_rag_search_observations(result)
+        if not result.chunks:
+            fallback_warnings.extend(result.warnings or ["RAG returned no chunks; used PaperStore context."])
+            self._progress("RAG returned no chunks; falling back to PaperStore context.")
+            return None
+
+        warnings = list(result.warnings)
+        summary = (
+            f"Loaded RAG context for {metadata.get('paper_id', paper_id)}: "
+            f"{metadata.get('title', 'Untitled')} "
+            f"({len(result.chunks)} chunk(s) for query: {normalized_query})"
+        )
+        return ToolResult(
+            tool="read_paper_context",
+            ok=True,
+            summary=summary,
+            data={
+                "metadata": metadata,
+                "abstract": abstract,
+                "rag_query": normalized_query,
+                "rag_context": self._truncate(result.context, max_chars),
+                "rag_chunks": observations["chunks"],
+                "rag_log_path": result.run_log_path,
+            },
+            warnings=warnings,
+            observations=observations,
+        )
+
+    def _rag_skip_warnings(self, query: str | None) -> list[str]:
+        if self.config.rag.enabled:
+            if not str(query or "").strip():
+                return ["RAG was enabled but no agent-generated query was provided; used PaperStore context."]
+            return []
+        if str(query or "").strip():
+            return ["RAG was disabled; used PaperStore context."]
+        return []
 
     def _progress(self, message: str) -> None:
         if self.progress_callback is not None:

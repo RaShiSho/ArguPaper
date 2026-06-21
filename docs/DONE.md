@@ -1,5 +1,15 @@
 # DONE
 
+## RAG Chat Agent Tools
+
+Completed: 2026-06-21
+
+- Added Agent-callable `rag_search_context` and `rag_index_paper` tools backed by `RAGWorkflow`.
+- Extended `ToolResult` with compact `observations` for RAG query, chunks, summary, warnings, and run log paths.
+- `read_paper_context` now tries RAG first when `RAG_ENABLED=true` and the Agent supplies a focused `query`; it falls back to the original PaperStore context logic when RAG is disabled, unavailable, or returns no chunks.
+- Chat tool execution and logs now preserve compact RAG observations without storing full paper markdown.
+- No RAG delete tool, chat slash command behavior, or full-text/debate/search tool behavior was changed.
+
 ## Adversarial Paper Court
 
 完成时间：2026-06-21
