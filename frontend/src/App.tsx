@@ -1,17 +1,26 @@
-import { Activity, FileSearch, FileText, Library, Server } from "lucide-react";
+import { Activity, Bot, Database, FileSearch, FileUp, Gavel, Library, Server, Swords } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { fetchConfigStatus } from "./api";
-import { AnalyzePage } from "./pages/AnalyzePage";
+import { ChatPage } from "./pages/ChatPage";
+import type { ChatMessage } from "./pages/ChatPage";
+import { ConvertPage } from "./pages/ConvertPage";
+import { CourtPage } from "./pages/CourtPage";
+import { DebatePage } from "./pages/DebatePage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { RAGPage } from "./pages/RAGPage";
 import { SearchPage } from "./pages/SearchPage";
 import type { ConfigStatusResponse } from "./types";
 
-type View = "search" | "analyze" | "library";
+type View = "search" | "convert" | "debate" | "court" | "rag" | "chat" | "library";
 
 const navItems: { id: View; label: string; icon: JSX.Element }[] = [
   { id: "search", label: "Search", icon: <FileSearch size={18} /> },
-  { id: "analyze", label: "Analyze", icon: <FileText size={18} /> },
+  { id: "convert", label: "Convert", icon: <FileUp size={18} /> },
+  { id: "debate", label: "Debate", icon: <Swords size={18} /> },
+  { id: "court", label: "Court", icon: <Gavel size={18} /> },
+  { id: "rag", label: "RAG", icon: <Database size={18} /> },
+  { id: "chat", label: "Chat", icon: <Bot size={18} /> },
   { id: "library", label: "Library", icon: <Library size={18} /> }
 ];
 
@@ -19,6 +28,11 @@ export function App(): JSX.Element {
   const [activeView, setActiveView] = useState<View>("search");
   const [config, setConfig] = useState<ConfigStatusResponse | null>(null);
   const [configError, setConfigError] = useState("");
+  const [chatSessionId, setChatSessionId] = useState("");
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +115,24 @@ export function App(): JSX.Element {
 
       <main className="main-panel">
         {activeView === "search" && <SearchPage />}
-        {activeView === "analyze" && <AnalyzePage />}
+        {activeView === "convert" && <ConvertPage />}
+        {activeView === "debate" && <DebatePage />}
+        {activeView === "court" && <CourtPage />}
+        {activeView === "rag" && <RAGPage />}
+        {activeView === "chat" && (
+          <ChatPage
+            sessionId={chatSessionId}
+            setSessionId={setChatSessionId}
+            message={chatMessage}
+            setMessage={setChatMessage}
+            messages={chatMessages}
+            setMessages={setChatMessages}
+            loading={chatLoading}
+            setLoading={setChatLoading}
+            error={chatError}
+            setError={setChatError}
+          />
+        )}
         {activeView === "library" && <LibraryPage />}
       </main>
     </div>

@@ -40,8 +40,8 @@ export function SearchPage(): JSX.Element {
     <section className="view-stack">
       <div className="toolbar">
         <div>
-          <h1>Paper Search</h1>
-          <p>Search workflow results from the existing retrieval workflow.</p>
+          <h1>Search</h1>
+          <p>Find external academic paper candidates through the configured retrieval sources.</p>
         </div>
       </div>
 
@@ -81,6 +81,7 @@ export function SearchPage(): JSX.Element {
       </form>
 
       {error && <div className="error-panel">{error}</div>}
+      {!result && !error && <div className="empty-state">Submit a query to inspect external paper candidates.</div>}
       {result && (
         <>
           <Warnings warnings={result.warnings} />
@@ -103,42 +104,46 @@ export function SearchPage(): JSX.Element {
             </div>
           </div>
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Authors</th>
-                  <th>Year</th>
-                  <th>Venue</th>
-                  <th>Citations</th>
-                  <th>Source</th>
-                  <th>URL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.results.map((paper, index) => (
-                  <tr key={`${paper.title}-${index}`}>
-                    <td>{paper.title}</td>
-                    <td>{paper.authors.slice(0, 3).join(", ") || "N/A"}</td>
-                    <td>{paper.year ?? "N/A"}</td>
-                    <td>{paper.venue || "N/A"}</td>
-                    <td>{paper.citation_count}</td>
-                    <td>{paper.source}</td>
-                    <td>
-                      {paper.url ? (
-                        <a href={paper.url} target="_blank" rel="noreferrer" aria-label={`Open ${paper.title}`}>
-                          <ExternalLink size={16} />
-                        </a>
-                      ) : (
-                        "N/A"
-                      )}
-                    </td>
+          {result.results.length === 0 ? (
+            <div className="empty-state">Search completed but returned no papers.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Authors</th>
+                    <th>Year</th>
+                    <th>Venue</th>
+                    <th>Citations</th>
+                    <th>Source</th>
+                    <th>URL</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {result.results.map((paper, index) => (
+                    <tr key={`${paper.title}-${index}`}>
+                      <td>{paper.title}</td>
+                      <td>{paper.authors.slice(0, 3).join(", ") || "N/A"}</td>
+                      <td>{paper.year ?? "N/A"}</td>
+                      <td>{paper.venue || "N/A"}</td>
+                      <td>{paper.citation_count}</td>
+                      <td>{paper.source}</td>
+                      <td>
+                        {paper.url ? (
+                          <a href={paper.url} target="_blank" rel="noreferrer" aria-label={`Open ${paper.title}`}>
+                            <ExternalLink size={16} />
+                          </a>
+                        ) : (
+                          "N/A"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="trace-panel">
             <span>Expanded queries: {result.expanded_queries.join(" | ") || "N/A"}</span>

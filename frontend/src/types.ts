@@ -48,6 +48,11 @@ export interface AnalyzeSubmitResponse {
   status: JobStatus;
 }
 
+export interface WorkflowSubmitResponse {
+  job_id: string;
+  status: JobStatus;
+}
+
 export interface AnalyzeWorkflowResult {
   report_markdown: string;
   report_title: string;
@@ -73,6 +78,116 @@ export interface AnalyzeJobStatusResponse {
   warnings: string[];
   result?: AnalyzeWorkflowResult | null;
   error?: string | null;
+}
+
+export interface WorkflowJobStatusResponse<T = unknown> {
+  job_id: string;
+  kind: string;
+  label: string;
+  status: JobStatus;
+  created_at: string;
+  updated_at: string;
+  progress: JobProgressMessage[];
+  warnings: string[];
+  result?: T | null;
+  error?: string | null;
+}
+
+export interface ConvertWorkflowResult {
+  conversion?: {
+    cache_key: string;
+    from_cache: boolean;
+    markdown?: string | null;
+  } | null;
+  summary?: {
+    total_entries: number;
+    processed: number;
+    success: number;
+    cache_hits: number;
+    failed: number;
+    skipped: number;
+  } | null;
+  input_path?: string | null;
+  cache_path?: string | null;
+  output_path?: string | null;
+  run_log_path?: string | null;
+}
+
+export interface CourtWorkflowResult {
+  paper_id: string;
+  report_title: string;
+  report_markdown: string;
+  saved_report_path?: string | null;
+  warnings: string[];
+}
+
+export interface RAGStatusResult {
+  rag_enabled: boolean;
+  ollama_base_url: string;
+  ollama_embed_model: string;
+  milvus_uri: string;
+  milvus_collection: string;
+  top_k: number;
+  chunk_size: number;
+  chunk_overlap: number;
+  include_references: boolean;
+  vector_dim: number;
+  run_log_path?: string | null;
+}
+
+export interface RAGChunk {
+  chunk_id: string;
+  paper_id: string;
+  section?: string | null;
+  section_type?: string | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  score: number;
+  text: string;
+}
+
+export interface RAGSearchResult {
+  content: string;
+  paper_id?: string | null;
+  top_k: number;
+  chunks: RAGChunk[];
+  context: string;
+  warnings: string[];
+  run_log_path?: string | null;
+}
+
+export interface RAGIndexResult {
+  paper_id: string;
+  chunk_count: number;
+  embedding_dim?: number | null;
+  skipped_sections: string[];
+  warnings: string[];
+  dry_run: boolean;
+  run_log_path?: string | null;
+}
+
+export interface RAGDeleteResult {
+  paper_id: string;
+  deleted_count?: number | null;
+  warnings: string[];
+  run_log_path?: string | null;
+}
+
+export interface ChatSessionResponse {
+  session_id: string;
+}
+
+export interface ChatTurnResponse {
+  response: string;
+  interrupted: boolean;
+  warnings: string[];
+  selected_paper?: {
+    paper_id: string;
+    title: string;
+    source: string;
+    library_status: string;
+  } | null;
+  log_path?: string | null;
 }
 
 export interface PaperListResponse {

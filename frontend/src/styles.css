@@ -194,6 +194,7 @@ h2 {
 
 .tool-panel {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 12px;
   padding: 14px;
@@ -209,6 +210,11 @@ h2 {
 
 .library-search {
   grid-template-columns: minmax(280px, 1fr) auto;
+}
+
+.workflow-form,
+.chat-form {
+  align-items: end;
 }
 
 .field {
@@ -269,6 +275,11 @@ h2 {
 .primary-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
+}
+
+.danger-button {
+  border-color: #9f2933;
+  background: #b93440;
 }
 
 .error-panel,
@@ -604,6 +615,56 @@ td a {
   color: #657280;
 }
 
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #c5ced8;
+  border-radius: 999px;
+  color: #40505f;
+  background: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.chat-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.chat-message {
+  display: grid;
+  gap: 8px;
+  max-width: 980px;
+  padding: 12px 14px;
+  border: 1px solid #d6dde4;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.chat-message > strong,
+.chat-message > small {
+  color: #52606d;
+}
+
+.chat-user {
+  justify-self: end;
+  width: min(760px, 100%);
+  background: #edf7f5;
+  border-color: #b9dcd6;
+}
+
+.chat-assistant {
+  justify-self: start;
+  width: min(980px, 100%);
+}
+
+.chat-message .markdown-panel {
+  padding: 0;
+  border: 0;
+}
+
 @media (max-width: 920px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -615,7 +676,7 @@ td a {
   }
 
   .nav-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   }
 
   .nav-list button {
