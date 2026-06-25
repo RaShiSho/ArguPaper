@@ -8,30 +8,53 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
+from argupaper.agents.chat import ChatAgentRuntime
+from argupaper.cli.commands.common import resolve_auto_report_path
 from argupaper.config import Config, load_config
 from argupaper.memory.paper_store import PaperStore
-from argupaper.web.jobs import AnalyzeJobRegistry
+from argupaper.web.jobs import AnalyzeJobRegistry, WorkflowJobRegistry
 from argupaper.web.schemas import (
     AnalyzeJobStatusResponse,
     AnalyzeSubmitResponse,
+    ChatSessionResponse,
+    ChatTurnRequest,
+    ChatTurnResponse,
     ConfigStatusResponse,
+    ConvertPathRequest,
+    CourtRequest,
+    DebateRequest,
     PaperDetailResponse,
     PaperListResponse,
+    RAGDeleteRequest,
+    RAGIndexRequest,
+    RAGSearchRequest,
     SearchRequest,
     SearchResponse,
+    WorkflowJobStatusResponse,
+    WorkflowSubmitResponse,
 )
 from argupaper.workflows import (
     AnalyzeOptions,
     AnalyzeWorkflow,
     ConfigurationError,
+    ConvertOptions,
+    ConvertWorkflow,
+    CourtOptions,
+    CourtWorkflow,
     ExternalServiceError,
     InputValidationError,
+    RAGDeleteOptions,
+    RAGIndexOptions,
+    RAGSearchOptions,
+    RAGWorkflow,
     SearchOptions,
 )
 from argupaper.workflows.search import InteractiveSearchWorkflow
 
 router = APIRouter(prefix="/api", tags=["workbench"])
-job_registry = AnalyzeJobRegistry()
+analyze_job_registry = AnalyzeJobRegistry()
+workflow_job_registry = WorkflowJobRegistry()
+chat_sessions: dict[str, ChatAgentRuntime] = {}
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -95,7 +118,7 @@ async def submit_analyze_job(
         force_reconvert=force_reconvert,
         verbose=verbose,
     )
-    record = job_registry.create(upload_path, original_name, options)
+    record = analyze_job_registry.create(upload_path, original_name, options)
     asyncio.create_task(_run_analyze_job(record.job_id, config))
     return AnalyzeSubmitResponse(job_id=record.job_id, status=record.status)
 
@@ -104,10 +127,210 @@ async def submit_analyze_job(
 async def get_job(job_id: str) -> AnalyzeJobStatusResponse:
     """Return a background analyze job snapshot."""
 
-    snapshot = job_registry.snapshot(job_id)
+    snapshot = analyze_job_registry.snapshot(job_id)
     if snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analyze job not found.")
     return snapshot
+
+
+@router.get("/workflow-jobs/{job_id}", response_model=WorkflowJobStatusResponse)
+async def get_workflow_job(job_id: str) -> WorkflowJobStatusResponse:
+    """Return a generic workflow job snapshot."""
+
+    snapshot = workflow_job_registry.snapshot(job_id)
+    if snapshot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow job not found.")
+    return snapshot
+
+
+@router.post("/convert/upload", response_model=WorkflowSubmitResponse)
+async def submit_convert_upload(
+    file: UploadFile = File(...),
+    output_path: str | None = Form(default=None),
+    force: bool = Form(default=False),
+) -> WorkflowSubmitResponse:
+    """Upload a PDF and start a conversion job."""
+
+    original_name = Path(file.filename or "paper.pdf").name
+    if Path(original_name).suffix.lower() != ".pdf":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only .pdf uploads are supported.")
+
+    try:
+        config = load_config(require_pdf_api_key=True)
+    except ConfigurationError as exc:
+        raise _http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, exc) from exc
+
+    upload_path = await _save_upload(file, config, original_name)
+    options = ConvertOptions(
+        pdf_path=upload_path,
+        output_path=Path(output_path) if output_path else None,
+        force_reconvert=force,
+    )
+    record = workflow_job_registry.create("convert", original_name)
+    asyncio.create_task(_run_convert_job(record.job_id, config, options))
+    return WorkflowSubmitResponse(job_id=record.job_id, status=record.status)
+
+
+@router.post("/convert/path", response_model=WorkflowSubmitResponse)
+async def submit_convert_path(request: ConvertPathRequest) -> WorkflowSubmitResponse:
+    """Start a conversion job for a local PDF path or folder path."""
+
+    if bool(request.pdf_path) == bool(request.folder_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide exactly one of pdf_path or folder_path.",
+        )
+    try:
+        config = load_config(require_pdf_api_key=True)
+    except ConfigurationError as exc:
+        raise _http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, exc) from exc
+
+    label = request.pdf_path or request.folder_path or "convert"
+    options = ConvertOptions(
+        pdf_path=Path(request.pdf_path) if request.pdf_path else None,
+        folder_path=Path(request.folder_path) if request.folder_path else None,
+        output_path=Path(request.output_path) if request.output_path else None,
+        force_reconvert=request.force,
+    )
+    record = workflow_job_registry.create("convert", label)
+    asyncio.create_task(_run_convert_job(record.job_id, config, options))
+    return WorkflowSubmitResponse(job_id=record.job_id, status=record.status)
+
+
+@router.post("/debate", response_model=WorkflowSubmitResponse)
+async def submit_debate(request: DebateRequest) -> WorkflowSubmitResponse:
+    """Start a debate analysis job for a saved paper name or local PDF path."""
+
+    paper = request.paper.strip()
+    if paper.startswith(("http://", "https://")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL debate analysis is not supported.")
+
+    output_path = Path(request.output_path) if request.output_path else None
+    if output_path is None and request.save_report:
+        output_path = resolve_auto_report_path(Path(paper))
+
+    paper_path = Path(paper)
+    if paper_path.exists():
+        if paper_path.suffix.lower() != ".pdf":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Input must be a .pdf file.")
+        options = AnalyzeOptions(
+            paper_path=paper_path,
+            output_path=output_path,
+            rounds=request.rounds,
+            force_reconvert=request.force,
+            verbose=request.verbose,
+        )
+    else:
+        options = AnalyzeOptions(
+            paper_name=paper,
+            output_path=output_path,
+            rounds=request.rounds,
+            force_reconvert=request.force,
+            verbose=request.verbose,
+        )
+
+    config = load_config(require_pdf_api_key=False)
+    record = workflow_job_registry.create("debate", paper)
+    asyncio.create_task(_run_debate_job(record.job_id, config, options))
+    return WorkflowSubmitResponse(job_id=record.job_id, status=record.status)
+
+
+@router.post("/court", response_model=WorkflowSubmitResponse)
+async def submit_court(request: CourtRequest) -> WorkflowSubmitResponse:
+    """Start a claim-level paper court job."""
+
+    config = load_config(require_pdf_api_key=False)
+    options = CourtOptions(
+        paper_id=request.paper_id,
+        output_path=Path(request.output_path) if request.output_path else None,
+        max_rounds=request.rounds,
+        verbose=request.verbose,
+    )
+    record = workflow_job_registry.create("court", request.paper_id)
+    asyncio.create_task(_run_court_job(record.job_id, config, options))
+    return WorkflowSubmitResponse(job_id=record.job_id, status=record.status)
+
+
+@router.get("/rag/status")
+async def get_rag_status() -> object:
+    """Return local RAG configuration."""
+
+    workflow = RAGWorkflow(load_config(require_pdf_api_key=False))
+    try:
+        return workflow.status()
+    finally:
+        await workflow.close()
+
+
+@router.post("/rag/index", response_model=WorkflowSubmitResponse)
+async def submit_rag_index(request: RAGIndexRequest) -> WorkflowSubmitResponse:
+    """Start a RAG indexing job."""
+
+    config = load_config(require_pdf_api_key=False)
+    record = workflow_job_registry.create("rag-index", request.paper_id)
+    asyncio.create_task(
+        _run_rag_index_job(record.job_id, config, RAGIndexOptions(paper_id=request.paper_id, dry_run=request.dry_run))
+    )
+    return WorkflowSubmitResponse(job_id=record.job_id, status=record.status)
+
+
+@router.post("/rag/delete", response_model=WorkflowSubmitResponse)
+async def submit_rag_delete(request: RAGDeleteRequest) -> WorkflowSubmitResponse:
+    """Start a RAG delete job."""
+
+    config = load_config(require_pdf_api_key=False)
+    record = workflow_job_registry.create("rag-delete", request.paper_id)
+    asyncio.create_task(_run_rag_delete_job(record.job_id, config, RAGDeleteOptions(paper_id=request.paper_id)))
+    return WorkflowSubmitResponse(job_id=record.job_id, status=record.status)
+
+
+@router.post("/rag/search")
+async def search_rag(request: RAGSearchRequest) -> object:
+    """Search local RAG chunks."""
+
+    workflow = RAGWorkflow(load_config(require_pdf_api_key=False))
+    try:
+        return await workflow.search(
+            RAGSearchOptions(
+                content=request.content,
+                paper_id=request.paper_id,
+                top_k=request.top_k,
+                section_type=request.section_type,
+                score_threshold=request.score_threshold,
+                context_max_chars=request.context_max_chars,
+            )
+        )
+    except InputValidationError as exc:
+        raise _http_error(status.HTTP_400_BAD_REQUEST, exc) from exc
+    finally:
+        await workflow.close()
+
+
+@router.post("/chat/sessions", response_model=ChatSessionResponse)
+async def create_chat_session() -> ChatSessionResponse:
+    """Create a stateful chat agent session."""
+
+    session_id = uuid4().hex
+    config = load_config(require_pdf_api_key=False)
+    chat_sessions[session_id] = ChatAgentRuntime(config)
+    return ChatSessionResponse(session_id=session_id)
+
+
+@router.post("/chat/sessions/{session_id}/turn", response_model=ChatTurnResponse)
+async def run_chat_turn(session_id: str, request: ChatTurnRequest) -> ChatTurnResponse:
+    """Run one chat agent turn in an existing session."""
+
+    runtime = chat_sessions.get(session_id)
+    if runtime is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found.")
+    result = await runtime.run_turn(request.message.strip())
+    return ChatTurnResponse(
+        response=result.response,
+        interrupted=result.interrupted,
+        warnings=result.warnings,
+        selected_paper=result.selected_paper,
+        log_path=result.log_path,
+    )
 
 
 @router.get("/papers", response_model=PaperListResponse)
@@ -178,21 +401,95 @@ async def _save_upload(file: UploadFile, config: Config, original_name: str) -> 
 async def _run_analyze_job(job_id: str, config: Config) -> None:
     """Execute an analyze workflow and update job state."""
 
-    record = job_registry.get(job_id)
+    record = analyze_job_registry.get(job_id)
     if record is None:
         return
 
-    job_registry.mark_running(job_id)
+    analyze_job_registry.mark_running(job_id)
 
     def progress_callback(message: str) -> None:
-        job_registry.add_progress(job_id, message)
+        analyze_job_registry.add_progress(job_id, message)
 
     try:
         workflow = AnalyzeWorkflow(config)
         result = await workflow.run(record.options, progress_callback)
-        job_registry.mark_succeeded(job_id, result)
+        analyze_job_registry.mark_succeeded(job_id, result)
     except Exception as exc:  # noqa: BLE001 - surfaced as job failure for local UI
-        job_registry.mark_failed(job_id, exc)
+        analyze_job_registry.mark_failed(job_id, exc)
+
+
+async def _run_convert_job(job_id: str, config: Config, options: ConvertOptions) -> None:
+    workflow_job_registry.mark_running(job_id)
+
+    def progress_callback(message: str) -> None:
+        workflow_job_registry.add_progress(job_id, message)
+
+    def file_event_callback(message: str) -> None:
+        workflow_job_registry.add_progress(job_id, message)
+
+    try:
+        result = await ConvertWorkflow(config).run(options, progress_callback, file_event_callback)
+        workflow_job_registry.mark_succeeded(job_id, result)
+    except Exception as exc:  # noqa: BLE001 - surfaced as job failure for local UI
+        workflow_job_registry.mark_failed(job_id, exc)
+
+
+async def _run_debate_job(job_id: str, config: Config, options: AnalyzeOptions) -> None:
+    workflow_job_registry.mark_running(job_id)
+
+    def progress_callback(message: str) -> None:
+        workflow_job_registry.add_progress(job_id, message)
+
+    try:
+        result = await AnalyzeWorkflow(config).run(options, progress_callback)
+        workflow_job_registry.mark_succeeded(job_id, result, result.warnings)
+    except Exception as exc:  # noqa: BLE001 - surfaced as job failure for local UI
+        workflow_job_registry.mark_failed(job_id, exc)
+
+
+async def _run_court_job(job_id: str, config: Config, options: CourtOptions) -> None:
+    workflow_job_registry.mark_running(job_id)
+
+    def progress_callback(message: str) -> None:
+        workflow_job_registry.add_progress(job_id, message)
+
+    try:
+        result = await CourtWorkflow(config).run(options, progress_callback)
+        workflow_job_registry.mark_succeeded(job_id, result, result.warnings)
+    except Exception as exc:  # noqa: BLE001 - surfaced as job failure for local UI
+        workflow_job_registry.mark_failed(job_id, exc)
+
+
+async def _run_rag_index_job(job_id: str, config: Config, options: RAGIndexOptions) -> None:
+    workflow_job_registry.mark_running(job_id)
+    workflow = RAGWorkflow(config)
+
+    def progress_callback(message: str) -> None:
+        workflow_job_registry.add_progress(job_id, message)
+
+    try:
+        result = await workflow.index_paper(options, progress_callback)
+        workflow_job_registry.mark_succeeded(job_id, result, result.warnings)
+    except Exception as exc:  # noqa: BLE001 - surfaced as job failure for local UI
+        workflow_job_registry.mark_failed(job_id, exc)
+    finally:
+        await workflow.close()
+
+
+async def _run_rag_delete_job(job_id: str, config: Config, options: RAGDeleteOptions) -> None:
+    workflow_job_registry.mark_running(job_id)
+    workflow = RAGWorkflow(config)
+
+    def progress_callback(message: str) -> None:
+        workflow_job_registry.add_progress(job_id, message)
+
+    try:
+        result = await workflow.delete_paper(options, progress_callback)
+        workflow_job_registry.mark_succeeded(job_id, result, result.warnings)
+    except Exception as exc:  # noqa: BLE001 - surfaced as job failure for local UI
+        workflow_job_registry.mark_failed(job_id, exc)
+    finally:
+        await workflow.close()
 
 
 def _build_paper_store() -> PaperStore:

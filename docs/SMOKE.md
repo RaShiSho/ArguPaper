@@ -1,5 +1,32 @@
 # SMOKE
 
+## Web CLI Parity
+
+- Feature: Web workbench coverage for CLI command families.
+- Scenario: Verify Search, Convert, Debate, Court, RAG, Chat, and Library pages are reachable from the Web UI and backed by API routes.
+- Preconditions: `uv sync` has been run; frontend dependencies are installed; external services are configured only for operations that need them, such as MinerU, Ollama, or Milvus.
+- Steps:
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper --help
+uv run python -c "from argupaper.web.app import create_app; app=create_app(); print(len(app.routes))"
+cd frontend
+npm run build
+```
+
+- Optional live Web smoke:
+  1. Start backend with `uv run uvicorn argupaper.web.app:create_app --factory --host 127.0.0.1 --port 8000`.
+  2. Start frontend with `npm run dev -- --host 127.0.0.1`.
+  3. Open the workbench and verify sidebar entries for Search, Convert, Debate, Court, RAG, Chat, and Library.
+  4. Confirm Operations and Analyze no longer appear as sidebar entries.
+  5. In Convert, Debate, Court, and RAG, submit invalid local inputs and verify readable errors or failed jobs instead of blank UI.
+  6. In Chat, send `/papers` and verify a session is created and the Markdown response renders.
+  7. Switch from Chat to another view, then return to Chat and verify the same session id and conversation messages remain visible.
+  8. Refresh the browser and verify the Chat conversation clears, because this smoke covers in-page navigation only.
+- Expected result: compile/help/import/build checks pass; Web API exposes the command routes; top-level pages are split by command family; UI can submit long-running workflow jobs and poll progress/results through `/api/workflow-jobs/{job_id}`.
+- Record: ___
+
 ## Court RAG Evidence Binder
 
 - 功能名称：`argupaper court` 优先使用本地 RAG/Milvus 证据
@@ -435,7 +462,7 @@ cd frontend
 npm run dev:log
 ```
 
-- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Analyze、Library 三个工作台视图；侧栏配置状态可正常显示或显示可读错误；`data/logs/web/web-frontend.log`、`data/logs/web/web-frontend.out.log`、`data/logs/web/web-frontend.err.log` 写入前端开发服务日志
+- 预期结果：浏览器打开 `http://127.0.0.1:5173` 后可看到 Search、Convert、Debate、Court、RAG、Chat、Library 七个一级页面；Operations 和 Analyze 不再作为侧栏入口出现；侧栏配置状态可正常显示或显示可读错误；`data/logs/web/web-frontend.log`、`data/logs/web/web-frontend.out.log`、`data/logs/web/web-frontend.err.log` 写入前端开发服务日志
 - 记录：____
 
 ### 17. Workbench Search 视图
@@ -451,24 +478,23 @@ npm run dev:log
 - 预期结果：页面展示结果表格、Retrieved / Filtered / Parser 指标、warning 列表和 trace 路径；无需解析 CLI Rich 输出
 - 记录：____
 
-### 18. Workbench Analyze 视图
+### 18. Workbench Debate 视图
 
-- 功能名称：Workbench PDF 分析后台任务
-- 适用场景：验证 PDF 上传后会创建后台任务，并可轮询进度和报告
-- 前置条件：后端与前端均已启动；已配置 `MINERU_API_KEY`；准备一个本地 PDF
+- 功能名称：Workbench Debate 后台任务
+- 适用场景：验证上传 PDF 和已保存论文/路径两种 Debate 入口都会创建后台任务，并可轮询进度和报告
+- 前置条件：后端与前端均已启动；上传 PDF 模式已配置 `MINERU_API_KEY`；已保存论文/路径模式存在至少一条 converted 记录
 - 执行步骤：
-  1. 打开 Analyze 视图
-  2. 上传 PDF
-  3. 设置 rounds 为 `2`
-  4. 点击 Start
-- 预期结果：页面显示 job 状态从 queued/running 到 succeeded 或 failed；running 阶段展示 progress timeline；成功时展示 Paper ID、cache、supplementary retrieval 和 Markdown 报告；失败时展示可读错误
+  1. 打开 Debate 视图
+  2. 在 Upload PDF 模式上传 PDF，设置 rounds 为 `2` 并提交
+  3. 切换到 Saved paper / path 模式，输入 paper ID 或 converted paper name 并提交
+- 预期结果：两种模式都显示 job 状态从 queued/running 到 succeeded 或 failed；running 阶段展示 progress timeline；成功时展示 Paper ID、cache/retrieval 元数据和 Markdown 报告；失败时展示可读错误
 - 记录：____
 
 ### 19. Workbench Library 视图
 
 - 功能名称：Workbench PaperStore 历史记录浏览
 - 适用场景：验证 React Library 页面读取本地保存记录
-- 前置条件：`PAPER_STORAGE_PATH` 下已有 analyze 保存的记录，或先执行一次 Analyze smoke
+- 前置条件：`PAPER_STORAGE_PATH` 下已有保存的论文记录，或先执行一次 Debate smoke
 - 执行步骤：
   1. 打开 Library 视图
   2. 查看记录列表或输入 query 过滤
@@ -483,7 +509,7 @@ npm run dev:log
 - 适用场景：验证 Web API 和 UI 对常见错误给出明确反馈
 - 前置条件：后端与前端均已启动
 - 执行步骤：
-  1. 在 Analyze 视图上传非 PDF 文件并点击 Start
+  1. 在 Debate 的 Upload PDF 模式上传非 PDF 文件并提交
   2. 在 Search 视图提交空 query 或会触发歧义澄清的请求
 - 预期结果：页面显示可读错误；非 PDF 返回 `Only .pdf uploads are supported.`；歧义搜索返回需要 clarification 的错误，而不是静默失败
 - 记录：____
@@ -643,3 +669,37 @@ uv run argupaper chat
 
 - 预期结果：编译成功；CLI 输出 `Critical Claim Report`，报告中包含 claim、evidence、challenge、defense、unresolved_disputes、risk_level、suggested_revision、required_check；evidence 保留 `chunk_id`、`source`、`page`、`section`；chat 中 `/court` 可对 selected paper 调用同一 court workflow。
 - 记录：__
+
+### 30. SciFact Court 可信度评测
+
+- 功能名称：`scifact_court_eval` 独立可信度评测入口
+- 适用场景：验证 `paper_court_graph` 可在 SciFact gold label 上端到端运行，并且评测 chunk 不进入默认 `paper_chunks` collection
+- 前置条件：已执行 `uv sync`；Milvus 可用；Ollama embedding 服务可用；若需要 Judge LLM 和 baseline LLM，已配置 `LLM_PROVIDER__DEFAULT__*`
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall scifact_court_eval
+uv run python scifact_court_eval/run_eval.py --help
+uv run python scifact_court_eval/run_eval.py run --help
+uv run python scifact_court_eval/run_eval.py cleanup-index --help
+uv run python scifact_court_eval/run_eval.py run --split dev --limit 3 --top-k 5 --max-rounds 1 --rebuild-index --index-scope claims
+uv run python scifact_court_eval/run_eval.py cleanup-index
+```
+
+- 预期结果：编译与 help 命令成功；运行命令创建或复用 `scifact_court_eval_chunks`，不写入 `paper_chunks`；`output/scifact_court_eval/` 下生成 `results.jsonl`、`judge_traces.jsonl`、`summary.json`、`summary.md`、`failures.md`；每条 retrieved evidence 的 `chunk_id` 形如 `scifact:<doc_id>:sent:<sentence_idx>`，metadata 保留 `source=scifact/corpus.jsonl`、`section=abstract`、`doc_id`、`sentence_idx`；Judge LLM 失败时单条记录标记为 `judge_failed` 且批次不中断；`cleanup-index` 只清理评测 collection 中 `paper_id=scifact` 的数据。
+- 记录：___
+### 31. SciFact Court 评测运行日志
+
+- 功能名称：`scifact_court_eval` JSONL 运行日志
+- 适用场景：验证 SciFact 评测会将索引、Baseline、Court、Judge、汇总事件写入 `data/logs/scifact/`
+- 前置条件：已执行 `uv sync`；Milvus、Ollama embedding、LLM provider 可用
+- 执行命令：
+
+```powershell
+uv run python -m compileall scifact_court_eval
+uv run python scifact_court_eval/run_eval.py run --help
+uv run python scifact_court_eval/run_eval.py run --split dev --limit 3 --top-k 5 --max-rounds 1 --rebuild-index --index-scope claims --collection scifact_court_eval_smoke
+```
+
+- 预期结果：控制台打印 `SciFact eval log:`；`data/logs/scifact/` 下生成 JSONL 日志；日志包含 `run_start`、`index_start`、`baseline_result`、`court_result`、`judge_result`、`claim_summary`、`run_summary`；当 Judge 或 Baseline 未返回可解析 JSON 时，日志包含 `raw_response_preview`，但 `output/scifact_court_eval/results.jsonl` 不包含 raw response。
+- 记录：___

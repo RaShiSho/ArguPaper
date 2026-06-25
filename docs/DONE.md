@@ -1,5 +1,16 @@
 # DONE
 
+## Web CLI Parity
+
+Completed: 2026-06-23
+
+- Added Web API coverage for the remaining CLI command surfaces: convert, debate, court, chat, and RAG status/index/delete/search.
+- Added a generic in-memory workflow job registry so long-running Web operations can expose queued/running/succeeded/failed state, progress messages, warnings, results, and readable errors.
+- Split the former Operations view into first-level Convert, Debate, Court, and RAG pages beside Search, Chat, and Library.
+- Renamed the Web Analyze entry to Debate and merged uploaded-PDF debate with saved-paper/path debate in one page.
+- Improved Search and Debate workbench layout with clearer form, empty, status, summary, and result sections.
+- Verified Python import/compile, CLI help, frontend production build, and local HTTP availability for backend and frontend dev servers.
+
 ## Court RAG Evidence Binder
 
 完成时间：2026-06-21
@@ -622,3 +633,38 @@ CLI 已具备 MVP 可用性：
 - `argupaper analyze` 在局部失败时不再轻易整体中断
 - 报告中的 debate 与 judge 信息更清晰，warning 能直接暴露给用户
 - analyze 主链路具备更清晰的手工 smoke 验收入口，便于后续继续增强 Judge、Report 和 Debate
+
+## SciFact Court 可信度评测入口
+
+完成时间：2026-06-21
+
+本次新增根目录实验评测模块 `scifact_court_eval/`，用于用 `sample/scifact` 数据端到端测试现有 `paper_court_graph` 的 claim 级可信度表现。
+
+主要内容：
+
+- 新增 SciFact JSONL loader，读取 `corpus.jsonl` 与 `claims_dev.jsonl` / `claims_test.jsonl`。
+- 新增独立 Milvus 索引器，固定默认 collection 为 `scifact_court_eval_chunks`，不调用主系统 `argupaper rag index`，不写入默认 `paper_chunks`。
+- 新增 SciFact RAG retriever 适配器，复用 `OllamaEmbeddingClient` 与 `MilvusVectorStore`，但忽略 court synthetic paper_id，仅检索 SciFact 独立 collection 中 `paper_id=scifact` 的数据。
+- 新增端到端 runner：对每条 SciFact claim 构造 synthetic markdown，调用现有 `PaperCourtGraph`，再用 Judge LLM 输出结构化评分。
+- 新增直接读取 gold/cited abstract 的 baseline，便于与 court 结果对照。
+- 新增自动指标与 Judge 指标汇总，输出 `results.jsonl`、`judge_traces.jsonl`、`summary.json`、`summary.md`、`failures.md`。
+- 新增 `cleanup-index` 命令，仅清理 `scifact_court_eval_chunks` 中 `paper_id=scifact` 的评测数据。
+
+默认命令：
+
+```powershell
+uv run python scifact_court_eval/run_eval.py run --split dev --limit 50 --top-k 10 --max-rounds 1 --index-if-missing
+```
+## SciFact Court 评测运行日志
+
+完成时间：2026-06-23
+
+本次为根目录实验模块 `scifact_court_eval/` 新增独立 JSONL 运行日志，默认写入 `data/logs/scifact/`。
+
+主要内容：
+
+- 新增 `ScifactEvalLogger`，每次评测生成独立 JSONL run log。
+- `run_eval.py` 新增 `--log-dir` 参数，并在控制台打印 `SciFact eval log:`。
+- 日志覆盖 `run_start`、索引进度、每条 claim 的 baseline/court/judge 结果、claim 汇总和最终 `run_summary`。
+- Judge/Baseline 失败或成功时都会在日志中记录截断后的 `raw_response_preview`、provider/model 和 prompt 元信息，便于诊断 LLM 未返回 JSON。
+- `results.jsonl` 等评测结果文件保持原结构，不写入 raw response。
