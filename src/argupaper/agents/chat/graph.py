@@ -238,6 +238,10 @@ class ChatAgentRuntime:
         if local_first_response is not None:
             return local_first_response
 
+        failed_observation_response = self._failed_observation_response(state)
+        if failed_observation_response is not None:
+            return failed_observation_response
+
         if state.get("react_steps", 0) >= state.get("max_steps", self.max_steps):
             return {
                 "final_response": "已达到本轮工具调用上限，先根据已有结果收束：\n"
@@ -307,6 +311,7 @@ class ChatAgentRuntime:
                 tool_name,
                 dict(raw_arguments) if isinstance(raw_arguments, dict) else {},
                 state.get("selected_paper"),
+                state["user_input"],
             )
             self.logger.write(
                 "react_decision",
@@ -368,7 +373,12 @@ class ChatAgentRuntime:
         action = state.get("pending_action") or {}
         tool_name = str(action.get("tool", "")).strip()
         raw_arguments = dict(action.get("arguments", {}) or {})
-        arguments = self._prepare_tool_arguments(tool_name, raw_arguments, state.get("selected_paper"))
+        arguments = self._prepare_tool_arguments(
+            tool_name,
+            raw_arguments,
+            state.get("selected_paper"),
+            state["user_input"],
+        )
         signature = self._tool_signature(tool_name, arguments)
         self.logger.write(
             "tool_call",
@@ -421,7 +431,7 @@ class ChatAgentRuntime:
                 warnings.append(str(warning))
         if not observation.get("ok", False):
             warnings.append(str(observation.get("summary", "Tool failed.")))
-        update["warnings"] = warnings
+        update["warnings"] = self._dedupe_texts(warnings)
         return update
 
     async def _respond(self, state: ChatAgentState) -> dict[str, Any]:
@@ -551,6 +561,21 @@ class ChatAgentRuntime:
                 lines.append(
                     f"{index}. {item.get('title', 'Untitled')} "
                     f"({item.get('year', 'N/A')}, {item.get('source', 'unknown')})"
+                )
+            return "\n".join(lines)
+        if not observation.get("ok", True):
+            lines = [summary or "Tool execution failed."]
+            rag_log_path = data.get("rag_log_path") if isinstance(data, dict) else None
+            if rag_log_path:
+                lines.append(f"RAG log: {rag_log_path}")
+            warnings = self._dedupe_texts(observation.get("warnings", []) or [])
+            if warnings:
+                lines.append("Warnings:")
+                lines.extend(f"- {warning}" for warning in warnings)
+            if tool == "rag_search_context":
+                lines.append(
+                    "Next step: check the RAG vector store schema/index, rebuild the collection if needed, "
+                    "then reindex papers."
                 )
             return "\n".join(lines)
         return summary or "工具执行完成。"
@@ -723,6 +748,28 @@ class ChatAgentRuntime:
             f"- {item.get('tool', 'tool')}: {item.get('summary', '')}" for item in observations[-6:]
         )
 
+    def _failed_observation_response(self, state: ChatAgentState) -> dict[str, Any] | None:
+        observations = state.get("observations", [])
+        if not observations:
+            return None
+        last = observations[-1]
+        if last.get("ok", True):
+            return None
+        warnings = self._dedupe_texts([*state.get("warnings", []), *list(last.get("warnings", []) or [])])
+        return {
+            "final_response": self._format_observation_response(last),
+            "warnings": warnings,
+            "route": "respond",
+        }
+
+    def _dedupe_texts(self, values: list[Any]) -> list[str]:
+        deduped: list[str] = []
+        for value in values:
+            text = str(value or "").strip()
+            if text and text not in deduped:
+                deduped.append(text)
+        return deduped
+
     def _selected_text(self, selected: Any) -> str:
         selected_dict = self._selected_dict(selected)
         if not selected_dict:
@@ -861,9 +908,15 @@ class ChatAgentRuntime:
         tool_name: str,
         arguments: dict[str, Any],
         selected: Any,
+        user_input: str,
     ) -> dict[str, Any]:
         normalized = self.toolbox.normalize_arguments(tool_name, arguments)
-        return default_paper_id(tool_name, normalized, self._selected_dict(selected))
+        return default_paper_id(
+            tool_name,
+            normalized,
+            self._selected_dict(selected),
+            scope_rag_to_selected=self._is_current_paper_reference(user_input),
+        )
 
     def _find_duplicate_tool_call(
         self,
@@ -960,6 +1013,25 @@ class ChatAgentRuntime:
         ]
         return any(marker in text for marker in markers)
 
+    def _is_current_paper_reference(self, user_input: str) -> bool:
+        text = user_input.lower()
+        markers = [
+            "这篇论文",
+            "这篇文章",
+            "当前论文",
+            "当前文章",
+            "所选论文",
+            "选中的论文",
+            "已选论文",
+            "该论文",
+            "该文章",
+            "selected paper",
+            "current paper",
+            "this paper",
+            "this article",
+        ]
+        return any(marker in text for marker in markers)
+
     def _is_debate_request(self, user_input: str) -> bool:
         text = user_input.lower()
         markers = [
@@ -1028,9 +1100,13 @@ def default_paper_id(
     tool_name: str,
     arguments: dict[str, Any],
     selected_paper: dict[str, Any] | None,
+    *,
+    scope_rag_to_selected: bool = False,
 ) -> dict[str, Any]:
     """Fill paper_id from the selected paper when a tool omitted it."""
 
+    if tool_name == "rag_search_context" and not scope_rag_to_selected:
+        return arguments
     if tool_name not in {
         "read_paper_context",
         "read_paper_fulltext",

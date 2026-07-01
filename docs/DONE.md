@@ -668,3 +668,14 @@ uv run python scifact_court_eval/run_eval.py run --split dev --limit 50 --top-k 
 - 日志覆盖 `run_start`、索引进度、每条 claim 的 baseline/court/judge 结果、claim 汇总和最终 `run_summary`。
 - Judge/Baseline 失败或成功时都会在日志中记录截断后的 `raw_response_preview`、provider/model 和 prompt 元信息，便于诊断 LLM 未返回 JSON。
 - `results.jsonl` 等评测结果文件保持原结构，不写入 raw response。
+
+## Chat RAG 查询路由与失败处理
+
+完成时间：2026-06-25
+
+本次修复 `argupaper chat` 中 RAG 查询作用域和失败提示问题：
+
+- `rag_search_context` 默认不再自动注入当前 selected paper，跨库 RAG 查询可以检索所有 indexed papers。
+- 当用户明确说“这篇论文 / 当前论文 / selected paper”等范围时，才对 RAG 查询注入 selected paper id。
+- RAG tool 返回失败 observation 后，chat 会优先向用户展示 RAG/Milvus 失败摘要、RAG log 路径和处理建议，不再被后续 ReAct 非 JSON 错误覆盖。
+- Milvus vector store 会为 `paper_id` 标量过滤建立/检查索引；旧 collection 不兼容时返回明确的手动 rebuild/reindex 提示，不自动删除用户数据。

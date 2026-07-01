@@ -688,6 +688,7 @@ uv run python scifact_court_eval/run_eval.py cleanup-index
 
 - 预期结果：编译与 help 命令成功；运行命令创建或复用 `scifact_court_eval_chunks`，不写入 `paper_chunks`；`output/scifact_court_eval/` 下生成 `results.jsonl`、`judge_traces.jsonl`、`summary.json`、`summary.md`、`failures.md`；每条 retrieved evidence 的 `chunk_id` 形如 `scifact:<doc_id>:sent:<sentence_idx>`，metadata 保留 `source=scifact/corpus.jsonl`、`section=abstract`、`doc_id`、`sentence_idx`；Judge LLM 失败时单条记录标记为 `judge_failed` 且批次不中断；`cleanup-index` 只清理评测 collection 中 `paper_id=scifact` 的数据。
 - 记录：___
+
 ### 31. SciFact Court 评测运行日志
 
 - 功能名称：`scifact_court_eval` JSONL 运行日志
@@ -702,4 +703,24 @@ uv run python scifact_court_eval/run_eval.py run --split dev --limit 3 --top-k 5
 ```
 
 - 预期结果：控制台打印 `SciFact eval log:`；`data/logs/scifact/` 下生成 JSONL 日志；日志包含 `run_start`、`index_start`、`baseline_result`、`court_result`、`judge_result`、`claim_summary`、`run_summary`；当 Judge 或 Baseline 未返回可解析 JSON 时，日志包含 `raw_response_preview`，但 `output/scifact_court_eval/results.jsonl` 不包含 raw response。
+- 记录：___
+
+### 32. Chat RAG 查询路由与失败处理
+
+- 功能名称：Chat Agent RAG 查询作用域与失败提示
+- 适用场景：验证 `argupaper chat` 中 broad RAG 查询不会被错误限制到当前 selected paper，且 RAG tool 失败不会被 ReAct JSON 错误覆盖
+- 前置条件：已执行 `uv sync`；已配置 `RAG_ENABLED=true`；Milvus 与 Ollama embedding 服务可用；至少一篇本地论文已通过 `argupaper rag index <paper_id>` 建立索引
+- 执行命令或步骤：
+
+```powershell
+uv run python -m compileall src/argupaper
+uv run argupaper chat --help
+uv run argupaper chat
+/use BackdoorAgent
+在 rag 中查询和 agent 相关的内容有哪些，这些内容对应着哪些文章
+在这篇论文的 rag 中查询 agent 后门相关内容
+/exit
+```
+
+- 预期结果：第一条 RAG 自然语言查询调用 `rag_search_context` 时不注入 `paper_id`，可跨 indexed papers 检索；第二条明确“这篇论文”的查询会注入 selected paper id；若 Milvus collection 不兼容 `paper_id` filter，最终回复优先显示 RAG/Milvus 失败原因、RAG log 路径和手动 rebuild/reindex 建议，而不是只显示 “LLM 自然语言 Agent 当前不可用”
 - 记录：___

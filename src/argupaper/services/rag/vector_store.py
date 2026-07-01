@@ -25,10 +25,13 @@ SOURCE_MAX_LENGTH = 2048
 DELETE_PK_BATCH_SIZE = 100
 
 VECTOR_FIELD = "vector"
+PAPER_ID_FIELD = "paper_id"
 VECTOR_METRIC_TYPE = "IP"
+PAPER_ID_INDEX_TYPE = "INVERTED"
+PAPER_ID_INDEX_NAME = "paper_id_idx"
 OUTPUT_FIELDS = [
     "chunk_id",
-    "paper_id",
+    PAPER_ID_FIELD,
     "chunk_index",
     "section",
     "source",
@@ -94,6 +97,7 @@ class MilvusVectorStore:
             if client.has_collection(collection_name=self.collection_name, timeout=self.timeout_seconds):
                 self._validate_existing_dimension(client, expected_dimension)
                 self._ensure_vector_index(client)
+                self._ensure_paper_id_index(client)
                 return
             self._create_collection(client, expected_dimension)
         except (ConfigurationError, ExternalServiceError, InputValidationError):
@@ -162,6 +166,8 @@ class MilvusVectorStore:
                 return []
             self._validate_existing_dimension(client, len(vector))
             self._load_collection(client)
+            if paper_id is not None:
+                self._ensure_paper_id_index(client)
             expression = self._paper_filter(paper_id) if paper_id is not None else ""
             results = client.search(
                 collection_name=self.collection_name,
@@ -176,6 +182,8 @@ class MilvusVectorStore:
         except (ConfigurationError, ExternalServiceError, InputValidationError):
             raise
         except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            if paper_id is not None and self._is_filter_compatibility_error(exc):
+                raise ExternalServiceError(self._filter_compatibility_message("search", exc)) from exc
             raise self._external_error("search", exc) from exc
 
         return self._parse_search_results(results)
@@ -251,7 +259,7 @@ class MilvusVectorStore:
             max_length=CHUNK_ID_MAX_LENGTH,
         )
         schema.add_field(
-            field_name="paper_id",
+            field_name=PAPER_ID_FIELD,
             datatype=self._data_type.VARCHAR,
             max_length=PAPER_ID_MAX_LENGTH,
         )
@@ -281,7 +289,7 @@ class MilvusVectorStore:
         client.create_collection(
             collection_name=self.collection_name,
             schema=schema,
-            index_params=self._vector_index_params(client),
+            index_params=self._collection_index_params(client),
             timeout=self.timeout_seconds,
         )
 
@@ -306,10 +314,48 @@ class MilvusVectorStore:
         except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
             raise self._external_error("ensure vector index", exc) from exc
 
+    def _ensure_paper_id_index(self, client: Any) -> None:
+        try:
+            indexes = client.list_indexes(
+                collection_name=self.collection_name,
+                timeout=self.timeout_seconds,
+            )
+        except TypeError:
+            indexes = client.list_indexes(collection_name=self.collection_name)
+
+        if self._has_field_index(indexes, PAPER_ID_FIELD, PAPER_ID_INDEX_NAME):
+            return
+
+        try:
+            client.create_index(
+                collection_name=self.collection_name,
+                index_params=self._paper_id_index_params(client),
+                timeout=self.timeout_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001 - convert SDK-specific errors at the boundary
+            raise ExternalServiceError(self._filter_compatibility_message("ensure paper_id index", exc)) from exc
+
+    def _collection_index_params(self, client: Any) -> Any:
+        index_params = self._vector_index_params(client)
+        self._add_paper_id_index(index_params)
+        return index_params
+
     def _vector_index_params(self, client: Any) -> Any:
         index_params = client.prepare_index_params()
         index_params.add_index(field_name=VECTOR_FIELD, metric_type=VECTOR_METRIC_TYPE)
         return index_params
+
+    def _paper_id_index_params(self, client: Any) -> Any:
+        index_params = client.prepare_index_params()
+        self._add_paper_id_index(index_params)
+        return index_params
+
+    def _add_paper_id_index(self, index_params: Any) -> None:
+        index_params.add_index(
+            field_name=PAPER_ID_FIELD,
+            index_type=PAPER_ID_INDEX_TYPE,
+            index_name=PAPER_ID_INDEX_NAME,
+        )
 
     def _has_vector_index(self, indexes: Any) -> bool:
         if not indexes:
@@ -320,6 +366,20 @@ class MilvusVectorStore:
             if isinstance(index, str) and index == VECTOR_FIELD:
                 return True
             if isinstance(index, dict) and index.get("field_name") == VECTOR_FIELD:
+                return True
+        return False
+
+    def _has_field_index(self, indexes: Any, field_name: str, index_name: str) -> bool:
+        if not indexes:
+            return False
+        for index in indexes:
+            if isinstance(index, str) and index in {field_name, index_name}:
+                return True
+            if not isinstance(index, dict):
+                continue
+            if index.get("field_name") == field_name:
+                return True
+            if index.get("index_name") == index_name:
                 return True
         return False
 
@@ -422,7 +482,7 @@ class MilvusVectorStore:
         source = self._validate_optional_text(chunk.source, "source", SOURCE_MAX_LENGTH)
         return {
             "chunk_id": chunk_id,
-            "paper_id": paper_id,
+            PAPER_ID_FIELD: paper_id,
             "chunk_index": int(chunk.chunk_index),
             "section": section,
             "source": source,
@@ -483,7 +543,7 @@ class MilvusVectorStore:
         return data if isinstance(data, dict) else {}
 
     def _paper_filter(self, paper_id: str) -> str:
-        return f"paper_id == '{self._validate_paper_id(paper_id)}'"
+        return f"{PAPER_ID_FIELD} == '{self._validate_paper_id(paper_id)}'"
 
     def _chunk_id_filter(self, chunk_ids: list[str]) -> str:
         if not chunk_ids:
@@ -609,6 +669,26 @@ class MilvusVectorStore:
         message = str(exc)
         return "Upsert" in message and (
             "UNIMPLEMENTED" in message or "unknown method Upsert" in message
+        )
+
+    def _is_filter_compatibility_error(self, exc: Exception) -> bool:
+        message = str(exc)
+        markers = [
+            "Unsupported field type",
+            "cannot parse expression",
+            "failed to create query plan",
+            "field paper_id",
+            f"field {PAPER_ID_FIELD}",
+        ]
+        return any(marker in message for marker in markers)
+
+    def _filter_compatibility_message(self, operation: str, exc: Exception) -> str:
+        return (
+            "Milvus RAG collection is not compatible with paper_id filtered search "
+            f"(operation={operation}; uri={self.config.uri}; collection={self.collection_name}; "
+            f"index_field={PAPER_ID_FIELD}; index_type={PAPER_ID_INDEX_TYPE}; "
+            f"error={type(exc).__name__}: {exc}). "
+            "Rebuild the RAG collection and reindex papers manually before using scoped RAG search."
         )
 
     def _ensure_local_uri_parent(self, uri: str) -> None:
