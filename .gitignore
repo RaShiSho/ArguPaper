@@ -68,3 +68,7 @@ openspec/
 .codex/
 .claude/
 .agents/
+
+
+# langgraph cli
+.langgraph_api/

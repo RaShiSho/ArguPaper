@@ -90,19 +90,62 @@ ANALYZE_ENABLE_RETRIEVAL_LOOP=true
 
 如果默认 LLM provider 未配置、请求失败或返回空内容，debate 会自动降级到确定性规则输出，并在 warnings 中说明降级原因；Search workflow 不受此变更影响。
 
-## 启动
+## 启动与命令速览
+
+### CLI 常用命令
+
+```bash
+# 帮助与版本
+uv run argupaper --help
+uv run argupaper --version
+
+# 外部论文检索
+uv run argupaper search "retrieval augmented generation" --limit 10 --source both
+
+# 本地 PDF 转 Markdown，并写入缓存与 PaperStore
+uv run argupaper convert ./paper.pdf
+uv run argupaper convert --folder ./papers --force
+
+# 查看本地论文库
+uv run argupaper papers
+uv run argupaper papers --query "retrieval"
+uv run argupaper papers <paper_id_or_hash_prefix> --report
+
+# 多 Agent 辩论式论文分析
+uv run argupaper debate <paper_id_or_name> --rounds 2 --save-report
+
+# claim 级对抗式论文审查
+uv run argupaper court <paper_id> --max-rounds 2
+
+# 本地 RAG
+uv run argupaper rag status
+uv run argupaper rag index <paper_id>
+uv run argupaper rag search "query" --paper-id <paper_id>
+uv run argupaper rag delete <paper_id>
+
+# 多轮科研阅读 Chat Agent
+uv run argupaper chat
+```
+
+简要说明：
+
+- `search`：检索外部学术来源，支持 Semantic Scholar、arXiv 与配置 SerpApi 后的 Google Scholar。
+- `convert`：只支持本地 PDF；目录模式只扫描目录直属 PDF，不递归进入子目录。
+- `papers`：读取本地 `PAPER_STORAGE_PATH` 中的 PaperStore 记录。
+- `debate`：基于已转换或已入库论文运行 Support/Skeptic 多 Agent 分析。
+- `court`：抽取论文 claim，绑定证据并生成 challenge、defense、verdict 与人工检查点。
+- `rag`：管理本地论文向量索引，依赖 `RAG_ENABLED=true`、Ollama embedding 与 Milvus。
+- `chat`：进入 LangGraph Chat Agent，支持 `/papers`、`/use <paper>`、`/debate`、`/court` 和自然语言问答。
 
 ### 本地 Web 工作台
 
-后端 API：
+启动后端 API：
 
 ```bash
 uv run uvicorn argupaper.web.app:app --reload --port 8000
 ```
 
-后端文件日志会写入 `LOG_PATH/web/web-backend.log`，默认路径为 `data/logs/web/web-backend.log`。
-
-前端开发服务：
+启动前端开发服务：
 
 ```bash
 cd frontend
@@ -110,95 +153,13 @@ npm install
 npm run dev:log
 ```
 
-前端开发服务的 stdout/stderr 会写入 `LOG_PATH/web/web-frontend.log`、`LOG_PATH/web/web-frontend.out.log` 与 `LOG_PATH/web/web-frontend.err.log`。
+打开 `http://127.0.0.1:5173`。Vite 会将 `/api` 代理到 `http://127.0.0.1:8000`。
 
-打开 `http://127.0.0.1:5173`。Vite 已将 `/api` 代理到 `http://127.0.0.1:8000`。
+Web 工作台包含 Search、Convert、Debate、Court、RAG、Chat、Library 页面。默认日志路径：
 
-工作台当前包含：
-
-- Search：调用现有 Search / Retrieval workflow，展示结果、warning 与 trace。
-- Analyze：上传本地 PDF，创建后台分析任务，并轮询展示进度、warning 与 Markdown 报告。
-- Library：读取 `PAPER_STORAGE_PATH` 下的本地 PaperStore 历史记录，展示结构化摘要、报告和论文 Markdown。
-
-### CLI
-
-查看帮助：
-
-```bash
-uv run argupaper --help
-```
-
-检索论文：
-
-```bash
-uv run argupaper search "retrieval augmented generation" --limit 10 --source both
-```
-
-说明：
-
-- `--source both` 当前会聚合多个来源的结果并排序返回。
-- `--source google_scholar` 或 `--source serpapi` 会通过 SerpApi 调用 Google Scholar。
-- 配置 `SERPAPI_API_KEY` 后，`--source both` 会自动加入 Google Scholar；当 `--source semantic_scholar` 遇到 403/429 且已配置 SerpApi 时，会回退到 Google Scholar。
-- 但当前去重逻辑仍存在已知限制：在同标题但实际不是同一篇论文的场景下，可能发生误合并。
-
-转换本地 PDF：
-
-```bash
-uv run argupaper convert ./paper.pdf
-uv run argupaper convert ./paper.pdf --output ./paper.md
-```
-
-批量转换目录中的 PDF：
-
-```bash
-uv run argupaper convert --folder ./papers
-uv run argupaper convert -d ./papers --force
-```
-
-说明：
-
-- `--folder/-d` 只扫描目录直属条目，不递归进入子目录。
-- 目录模式会跳过非 PDF 文件、子目录或不可读条目，并继续处理后续 PDF。
-- 目录模式不支持 `--output`；转换结果默认写入现有 `data/cache` Markdown 缓存。
-- 每次目录转换会在 `data/logs/convert/<run-id>.jsonl` 写入执行日志，记录成功、缓存命中、失败、跳过和最终汇总。
-
-基于已转换 Markdown 运行多 Agent 辩论式论文分析：
-
-```bash
-uv run argupaper debate "paper" --output 1.md --rounds 2
-```
-
-自动按论文文件名保存报告：
-
-```bash
-uv run argupaper debate "paper" --save-report
-```
-
-运行前请确认：
-
-- 先执行过 `argupaper convert ./paper.pdf`，使 `data/cache` 中存在对应 Markdown 与 metadata
-- 只有执行 `convert` 或 legacy PDF debate 时才需要配置 `MINERU_API_KEY` 与 `MINERU_API_ENDPOINT`
-- 执行 `convert` 时当前网络可访问 MinerU API 与其返回的签名上传 URL
-
-查看本地历史记录：
-
-```bash
-uv run argupaper papers
-uv run argupaper papers --query "retrieval"
-uv run argupaper papers <paper_id_or_hash_prefix> --report
-```
-
-说明：
-
-- `papers` 默认读取 `PAPER_STORAGE_PATH` 下的本地记录。
-- `paper_id` 支持完整 ID 或唯一 hash 前缀。
-- `--report` 会渲染保存的 Markdown 报告；`--markdown` 会渲染缓存的论文 Markdown。
-
-查看版本：
-
-```bash
-uv run argupaper --version
-```
+- 后端：`data/logs/web/web-backend.log`
+- 前端：`data/logs/web/web-frontend.log`
+- 前端 stdout/stderr：`data/logs/web/web-frontend.out.log`、`data/logs/web/web-frontend.err.log`
 
 ## 说明
 
